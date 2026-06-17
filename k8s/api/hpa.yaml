@@ -1,0 +1,32 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: oficina-mecanica-api-hpa
+  namespace: oficina-mecanica
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: oficina-mecanica-api
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    # Evita flappin: espera 5 min de estabilidade antes de reduzir réplicas
+    scaleDown:
+      stabilizationWindowSeconds: 300
+    # Permite escalarimediatamente quando o consumo passa do limite
+    scaleUp:
+      stabilizationWindowSeconds: 0

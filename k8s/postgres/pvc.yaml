@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: oficina-mecanica
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  # Descomente e ajuste se o cluster exigir uma StorageClass específica(ex.: "gp3" na AWS, "standard" no GKE, "managed-csi" no AKS)
+  # storageClassName: standard

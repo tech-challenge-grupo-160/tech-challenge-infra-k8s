@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oficina-mecanica-api
+  namespace: oficina-mecanica
+  labels:
+    app: oficina-mecanica-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: oficina-mecanica-api
+  template:
+    metadata:
+      labels:
+        app: oficina-mecanica-api
+    spec:
+      containers:
+        - name: api
+          # substitua pelo seu registry (username do docker)
+          # em vez de "latest" em produção.
+          image: rm372368/fiap-techchallenge-oficina-mecanica-api:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: api-config
+            - secretRef:
+                name: api-secret
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+          # Requests/limits são obrigatórios para o HPA conseguir calcular o percentual de utilização de CPU/memória.
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
