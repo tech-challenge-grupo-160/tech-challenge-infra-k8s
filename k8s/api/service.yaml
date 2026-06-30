@@ -4,9 +4,10 @@ metadata:
   name: oficina-mecanica-api
   namespace: oficina-mecanica
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: oficina-mecanica-api
   ports:
     - port: 80
       targetPort: 8080
+      nodePort: 30080   
