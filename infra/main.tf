@@ -107,7 +107,7 @@ resource "kubernetes_secret" "postgres_secret" {
 
   data = {
     POSTGRES_USER     = var.postgres_user
-    POSTGRES_PASSWORD = var.postgres_password
+    POSTGRES_PASSWORD = var.postgres_pas
   }
 
   depends_on = [kubernetes_namespace.oficina_mecanica]
