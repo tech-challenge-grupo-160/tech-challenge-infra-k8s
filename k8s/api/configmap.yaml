@@ -4,7 +4,7 @@ metadata:
   name: api-config
   namespace: oficina-mecanica
 data:
-  ASPNETCORE_ENVIRONMENT: "Production"
+  ASPNETCORE_ENVIRONMENT: "Development"
   ASPNETCORE_URLS: "http://+:8080"
   Jwt__Issuer: "Fiap.TechChallenge.OficinaMecanica"
   Jwt__Audience: "Fiap.TechChallenge.OficinaMecanica"
