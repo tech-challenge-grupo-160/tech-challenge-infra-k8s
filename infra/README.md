@@ -62,15 +62,19 @@ kind --version
  **instale**
 
 winget install HashiCorp.Terraform
+
 winget install Kubernetes.kind
 
 **Acesse a pasta infra/ do projeto**
 cd infra
+
 terraform init
+
 terraform apply -var-file="inventories/dev/terraform.tfvars"
 
 **volte para a raiz do projeto**
 cd ..
+
 docker build -f docker/backend/Dockerfile -t oficina-mecanica-api:local .
 
 **Em seguida:**
@@ -80,23 +84,27 @@ kind load docker-image oficina-mecanica-api:local --name oficina-mecanica
 **Aplicar o kubernets**
 
 kubectl apply -k k8s/
+
 kubectl rollout restart deployment/oficina-mecanica-api -n oficina-mecanica
 
 **Espere até ficar running**
 
 kubectl get pods -n oficina-mecanica -w
 
-**Expor endpoint**
+**Expor endpoint se maquina windows** 
 
 kubectl port-forward -n oficina-mecanica svc/oficina-mecanica-api 8080:80
 
 Esses são os endpoints disponiveis
 http://localhost:8080/health    # health check
+
 http://localhost:8080/swagger   # documentacao
+
 POST http://localhost:8080/api/v1/auth/login
   body: { "username": "admin", "password": "admin123" }
 
 **Para destruir**
 
 cd infra
+
 terraform destroy -var-file="inventories/dev/terraform.tfvars"
