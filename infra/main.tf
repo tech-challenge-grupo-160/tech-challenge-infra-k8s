@@ -1,9 +1,9 @@
 provider "kind" {}
 
 resource "kind_cluster" "oficina_mecanica" {
-  name            = var.cluster_name
-  node_image      = "kindest/node:${var.kubernetes_version}"
-  wait_for_ready  = true 
+  name           = var.cluster_name
+  node_image     = "kindest/node:${var.kubernetes_version}"
+  wait_for_ready = true
 
   kind_config {
     kind        = "Cluster"
@@ -120,7 +120,7 @@ resource "kubernetes_secret" "api_secret" {
   }
 
   data = {
-    "ConnectionStrings__DefaultConnection" = "Host=postgres;Database=${var.postgres_db};Username=${var.postgres_user};Password=${var.postgres_password}"
+    "ConnectionStrings__DefaultConnection" = "Host=postgres;Database=${var.postgres_db};Username=${var.postgres_user};Password=${var.postgres_pas}"
     "Jwt__SecretKey"                       = var.jwt_secret_key
   }
 

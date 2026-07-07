@@ -6,8 +6,8 @@ variable "cluster_name" {
 
 variable "kubernetes_version" {
   description = "Versão da imagem do node kind"
-  type    = string
-  default = "v1.31.0"
+  type        = string
+  default     = "v1.31.0"
 }
 
 variable "control_plane_count" {

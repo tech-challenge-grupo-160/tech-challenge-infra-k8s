@@ -10,9 +10,9 @@ ingress_http_port  = 80
 ingress_https_port = 443
 
 # Banco de dados
-postgres_user     = "postgres"
+postgres_user = "postgres"
 postgres_pas  = "suasenha"
-postgres_db       = "oficina_mecanica"
+postgres_db   = "oficina_mecanica"
 
 # JWT — use uma chave forte em produção (mínimo 32 caracteres)
 jwt_secret_key = "suasenha"
