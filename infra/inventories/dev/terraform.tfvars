@@ -15,4 +15,4 @@ postgres_pas  = "suasenha"
 postgres_db   = "oficina_mecanica"
 
 # JWT — use uma chave forte em produção (mínimo 32 caracteres)
-jwt_secret_key = "suasenha"
+jwt_secret_key = "dev-local-jwt-secret-key-minimo-32-caracteres"

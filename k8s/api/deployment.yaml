@@ -17,9 +17,9 @@ spec:
     spec:
       containers:
         - name: api
-          # substitua pelo seu registry (username do docker)
-          # em vez de "latest" em produção.
-          image: rm372368/fiap-techchallenge-oficina-mecanica-api:1.0.0
+          # Imagem local carregada no cluster kind via:
+          # kind load docker-image oficina-mecanica-api:local --name oficina-mecanica
+          image: oficina-mecanica-api:local
           imagePullPolicy: Never
           ports:
             - containerPort: 8080
