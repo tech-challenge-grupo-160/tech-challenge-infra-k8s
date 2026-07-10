@@ -22,6 +22,7 @@ resource "kind_cluster" "oficina_mecanica" {
           host_port      = var.ingress_http_port
           protocol       = "TCP"
         }
+
         extra_port_mappings {
           container_port = 443
           host_port      = var.ingress_https_port
@@ -47,14 +48,13 @@ resource "kind_cluster" "oficina_mecanica" {
 
 provider "kubernetes" {
   # Usa o kubeconfig gerado pelo kind diretamente.
-  # Evita base64decode em campos que chegam vazios durante
-  # a criação do cluster, causando "Error in function call".
+  # Evita base64decode em campos que chegam vazios durante a criacao do cluster.
   config_path = kind_cluster.oficina_mecanica.kubeconfig_path
 }
 
 resource "kubernetes_namespace" "oficina_mecanica" {
   metadata {
-    name = "oficina-mecanica"
+    name = var.namespace
 
     labels = {
       "app.kubernetes.io/managed-by" = "terraform"
@@ -65,13 +65,7 @@ resource "kubernetes_namespace" "oficina_mecanica" {
   depends_on = [kind_cluster.oficina_mecanica]
 }
 
-
-# =========================================================
-# Metrics Server
-# Necessário para o HPA conseguir ler CPU/memória dos pods.
-# Instalado via kubectl após o cluster estar pronto, com o
-# patch --kubelet-insecure-tls exigido pelo kind.
-# =========================================================
+# Necessario para o HPA conseguir ler CPU/memoria dos pods no kind.
 resource "null_resource" "metrics_server" {
   triggers = {
     cluster_name = kind_cluster.oficina_mecanica.name
@@ -94,11 +88,6 @@ resource "null_resource" "metrics_server" {
   ]
 }
 
-# =========================================================
-# Secrets da aplicação gerenciados diretamente pelo
-# provider kubernetes — sem null_resource nem shell,
-# funciona igual em Windows, Linux e Mac.
-# =========================================================
 resource "kubernetes_secret" "postgres_secret" {
   metadata {
     name      = "postgres-secret"
@@ -125,26 +114,4 @@ resource "kubernetes_secret" "api_secret" {
   }
 
   depends_on = [kubernetes_namespace.oficina_mecanica]
-}
-
-resource "null_resource" "k8s_manifests" {
-  triggers = {
-    cluster_name = kind_cluster.oficina_mecanica.name
-  }
-
-  provisioner "local-exec" {
-    # Caminho relativo a partir da pasta infra/ onde o Terraform roda.
-    # ../k8s aponta para a pasta k8s/ na raiz do projeto.
-    command = "kubectl apply -k ../k8s"
-
-    environment = {
-      KUBECONFIG = kind_cluster.oficina_mecanica.kubeconfig_path
-    }
-  }
-
-  depends_on = [
-    null_resource.metrics_server,
-    kubernetes_secret.postgres_secret,
-    kubernetes_secret.api_secret
-  ]
 }
