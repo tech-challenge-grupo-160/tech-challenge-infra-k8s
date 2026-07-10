@@ -1,10 +1,11 @@
 cluster_name       = "oficina-mecanica"
+namespace          = "oficina-mecanica-homolog"
 kubernetes_version = "v1.31.0"
 
 control_plane_count = 1
 worker_count        = 2
 
-# Portas expostas no host (Windows)
+# Portas expostas no host Windows
 api_host_port      = 8080
 ingress_http_port  = 80
 ingress_https_port = 443
@@ -14,5 +15,5 @@ postgres_user = "postgres"
 postgres_pas  = "suasenha"
 postgres_db   = "oficina_mecanica"
 
-# JWT — use uma chave forte em produção (mínimo 32 caracteres)
-jwt_secret_key = "suasenha"
+# JWT local para homologacao (minimo 32 caracteres)
+jwt_secret_key = "homolog-local-jwt-secret-key-minimo-32-caracteres"
