@@ -47,9 +47,8 @@ resource "kind_cluster" "oficina_mecanica" {
 }
 
 provider "kubernetes" {
-  # Usa o kubeconfig gerado pelo kind diretamente.
-  # Evita base64decode em campos que chegam vazios durante a criacao do cluster.
-  config_path = kind_cluster.oficina_mecanica.kubeconfig_path
+  config_path    = pathexpand("~/.kube/config")
+  config_context = "kind-${var.cluster_name}"
 }
 
 resource "kubernetes_namespace" "oficina_mecanica" {
