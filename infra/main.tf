@@ -47,8 +47,10 @@ resource "kind_cluster" "oficina_mecanica" {
 }
 
 provider "kubernetes" {
-  config_path    = pathexpand("~/.kube/config")
-  config_context = "kind-${var.cluster_name}"
+  host                   = kind_cluster.oficina_mecanica.endpoint
+  client_certificate     = kind_cluster.oficina_mecanica.client_certificate
+  client_key             = kind_cluster.oficina_mecanica.client_key
+  cluster_ca_certificate = kind_cluster.oficina_mecanica.cluster_ca_certificate
 }
 
 resource "kubernetes_namespace" "oficina_mecanica" {
