@@ -65,6 +65,36 @@ Aplicar os manifests:
 kubectl apply -k k8s/
 ```
 
+## Credenciais da AWS nos pipelines
+
+O AWS Academy Learner Lab **não permite criar provedor OIDC nem roles IAM**, então os pipelines usam as **credenciais temporárias da sessão**, cadastradas como secrets. Elas expiram junto com a sessão do lab, a cada ~4 horas.
+
+Para renovar em todos os repositórios de uma vez:
+
+```bash
+./scripts/renova-secrets.sh
+```
+
+O script lê o perfil local do `~/.aws/credentials` e publica nos quatro repositórios **sem imprimir os valores em nenhum momento**.
+
+| Comando | O que faz |
+|---|---|
+| `./scripts/renova-secrets.sh` | Renova nos 4 repositórios |
+| `./scripts/renova-secrets.sh --check` | Mostra só nomes e datas dos secrets |
+| `./scripts/renova-secrets.sh --dry-run` | Mostra o que faria, sem alterar |
+
+### Como obter as credenciais
+
+No painel do Learner Lab: **AWS Details → AWS CLI**. Copie o bloco para o `~/.aws/credentials`, no perfil `default`.
+
+Se as credenciais estiverem expiradas, o script avisa e orienta: **End Lab**, depois **Start Lab**, e copiar o bloco novo.
+
+### Regra do time
+
+**Credencial não passa por chat, e-mail ou grupo de mensagem** — nem as temporárias. Mensagem fica salva e ninguém lembra de apagar. Se uma vazar, encerre e reinicie o lab imediatamente: isso invalida a sessão na hora.
+
+Essa limitação está registrada na [RFC-0001](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/rfcs/0001-escolha-da-nuvem.md) junto com o desenho correto (OIDC) que o ambiente inviabiliza.
+
 ## Deploy
 
 Pipeline em GitHub Actions ([issue #51](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/51)):
