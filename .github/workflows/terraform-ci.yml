@@ -105,20 +105,33 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Verifica se o inventory existe
+      - name: Verifica pre-requisitos do plan
         id: check
+        env:
+          BUCKET: ${{ vars.TF_STATE_BUCKET }}
         run: |
-          if [ -f "${TF_DIR}/inventories/${{ matrix.env }}/terraform.tfvars" ]; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::${TF_DIR}/inventories/${{ matrix.env }}/terraform.tfvars ainda nao existe - plan ignorado."
+          ok=true
+          if [ ! -f "${TF_DIR}/inventories/${{ matrix.env }}/terraform.tfvars" ]; then
+            echo "::notice::inventories/${{ matrix.env }} ainda nao existe - plan ignorado."
+            ok=false
           fi
+          # O backend S3 e declarado vazio e configurado no init. Sem o bucket
+          # nao ha como inicializar, entao o plan e pulado em vez de falhar.
+          if [ -z "$BUCKET" ]; then
+            echo "::notice::TF_STATE_BUCKET nao definida - rode o bootstrap (issue #57) e cadastre a variavel."
+            ok=false
+          fi
+          echo "exists=$ok" >> "$GITHUB_OUTPUT"
 
       - name: Terraform init
         if: steps.check.outputs.exists == 'true'
         working-directory: ${{ env.TF_DIR }}
-        run: terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ matrix.env }}/rede.tfstate" \
+            -backend-config="region=${{ vars.AWS_REGION || 'us-east-1' }}" \
+            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE || 'tc-grupo160-tflock' }}"
 
       # Sem credencial de nuvem o provider nao consegue consultar a API remota.
       # Ate a issue #54 (OIDC) entrar, o plan e informativo e nao bloqueia o PR.

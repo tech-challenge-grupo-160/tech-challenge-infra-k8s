@@ -1,72 +1,38 @@
-variable "cluster_name" {
-  description = "Nome do cluster kind que sera criado"
+variable "region" {
+  description = "Regiao AWS. O AWS Academy Learner Lab so permite us-east-1."
   type        = string
-  default     = "oficina-mecanica"
+  default     = "us-east-1"
 }
 
-variable "namespace" {
-  description = "Namespace Kubernetes que recebera os recursos da aplicacao"
+variable "project" {
+  description = "Prefixo dos recursos."
   type        = string
-  default     = "oficina-mecanica"
+  default     = "tc-grupo160"
 }
 
-variable "kubernetes_version" {
-  description = "Versao da imagem do node kind"
+variable "ambiente" {
+  description = "Ambiente logico (dev, hom, prod)."
   type        = string
-  default     = "v1.31.0"
+
+  validation {
+    condition     = contains(["dev", "hom", "prod"], var.ambiente)
+    error_message = "ambiente deve ser dev, hom ou prod."
+  }
 }
 
-variable "control_plane_count" {
-  description = "Numero de nos control-plane (use 1 para desenvolvimento local)"
-  type        = number
-  default     = 1
+variable "vpc_cidr" {
+  description = "CIDR da VPC."
+  type        = string
+  default     = "10.0.0.0/16"
 }
 
-variable "worker_count" {
-  description = "Numero de nos worker onde os pods da aplicacao serao agendados"
+variable "quantidade_azs" {
+  description = "Quantidade de zonas de disponibilidade. Minimo 2 para o RDS."
   type        = number
   default     = 2
-}
 
-variable "api_host_port" {
-  description = "Porta do host Windows mapeada para a porta 30080 do NodePort da API"
-  type        = number
-  default     = 8080
-}
-
-variable "ingress_http_port" {
-  description = "Porta HTTP do host mapeada para o ingress controller"
-  type        = number
-  default     = 80
-}
-
-variable "ingress_https_port" {
-  description = "Porta HTTPS do host mapeada para o ingress controller"
-  type        = number
-  default     = 443
-}
-
-variable "postgres_user" {
-  description = "Usuario do PostgreSQL"
-  type        = string
-  default     = "postgres"
-}
-
-variable "postgres_pas" {
-  description = "Senha do PostgreSQL"
-  type        = string
-  sensitive   = true
-}
-
-variable "postgres_db" {
-  description = "Nome do banco de dados"
-  type        = string
-  default     = "oficina_mecanica"
-}
-
-variable "jwt_secret_key" {
-  description = "Chave de assinatura JWT com minimo de 32 caracteres"
-  type        = string
-  sensitive   = true
-  default     = "dev-secret-key-minimo-32-caracteres-ok"
+  validation {
+    condition     = var.quantidade_azs >= 2
+    error_message = "O subnet group do RDS exige ao menos 2 AZs."
+  }
 }
