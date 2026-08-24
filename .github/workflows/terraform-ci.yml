@@ -1,0 +1,177 @@
+name: Terraform CI
+
+on:
+  pull_request:
+    branches: [develop, homolog, main]
+  push:
+    branches: [develop, homolog, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write   # necessario para OIDC quando o apply for habilitado (issue #54)
+
+env:
+  TF_VERSION: '1.9.8'
+  TF_IN_AUTOMATION: 'true'
+  # Diretorio raiz do Terraform neste repositorio.
+  TF_DIR: 'infra'
+  # Sem backend remoto configurado ainda. Quando a issue #57 entrar,
+  # remova o -backend=false para o init usar o state com lock.
+  TF_INIT_ARGS: '-backend=false'
+
+jobs:
+  validate:
+    name: Format e validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform fmt
+        id: fmt
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform fmt -check -recursive -diff
+        continue-on-error: true
+
+      - name: Terraform init
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init ${{ env.TF_INIT_ARGS }}
+
+      - name: Terraform validate
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform validate -no-color
+
+      - name: Falha se a formatacao estiver fora do padrao
+        if: steps.fmt.outcome == 'failure'
+        run: |
+          echo "::error::Arquivos Terraform fora do padrao. Rode 'terraform fmt -recursive' e commite."
+          exit 1
+
+  plan:
+    name: Plan (${{ matrix.env }})
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [dev, hom, prod]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Verifica se o inventory existe
+        id: check
+        run: |
+          if [ -f "${TF_DIR}/inventories/${{ matrix.env }}/terraform.tfvars" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::${TF_DIR}/inventories/${{ matrix.env }}/terraform.tfvars ainda nao existe - plan ignorado."
+          fi
+
+      - name: Terraform init
+        if: steps.check.outputs.exists == 'true'
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init ${{ env.TF_INIT_ARGS }}
+
+      # Sem credencial de nuvem o provider nao consegue consultar a API remota.
+      # Ate a issue #54 (OIDC) entrar, o plan e informativo e nao bloqueia o PR.
+      - name: Terraform plan
+        if: steps.check.outputs.exists == 'true'
+        continue-on-error: true
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          terraform plan -no-color -input=false \
+            -var-file="inventories/${{ matrix.env }}/terraform.tfvars" \
+            > "${GITHUB_WORKSPACE}/plan-${{ matrix.env }}.txt" 2>&1
+
+      - name: Comenta o plan no Pull Request
+        if: steps.check.outputs.exists == 'true'
+        uses: actions/github-script@v7
+        env:
+          MATRIX_ENV: ${{ matrix.env }}
+        with:
+          script: |
+            const fs = require('fs');
+            const env = process.env.MATRIX_ENV;
+            let body;
+            try {
+              let out = fs.readFileSync(`plan-${env}.txt`, 'utf8');
+              // Comentario do GitHub tem limite de 65536 caracteres
+              const LIMIT = 60000;
+              if (out.length > LIMIT) {
+                out = out.slice(0, LIMIT) + '\n\n... saida truncada, veja o log completo do job.';
+              }
+              body = `### Terraform plan — \`${env}\`\n\n<details><summary>Ver plan</summary>\n\n\`\`\`hcl\n${out}\n\`\`\`\n\n</details>`;
+            } catch (e) {
+              body = `### Terraform plan — \`${env}\`\n\nNao foi possivel ler a saida do plan. Veja o log do job.`;
+            }
+            body += '\n\n> Sem credenciais de nuvem configuradas, o plan e informativo. Habilitar na issue #54 (OIDC).';
+
+            const marker = `<!-- tf-plan-${env} -->`;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(marker));
+            const full = `${marker}\n${body}`;
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                comment_id: existing.id, body: full,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: context.issue.number, body: full,
+              });
+            }
+
+  apply:
+    name: Apply
+    runs-on: ubuntu-latest
+    needs: validate
+    # DESABILITADO ate existir autenticacao OIDC com a nuvem (issue #54).
+    # Para habilitar, troque a linha abaixo por:
+    #   if: github.event_name == 'push' && (github.ref_name == 'homolog' || github.ref_name == 'main')
+    if: false
+    environment: ${{ github.ref_name == 'main' && 'producao' || 'homologacao' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      # - name: Autenticar na nuvem via OIDC
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+      #     aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Terraform init
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init
+
+      - name: Terraform apply
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          ENV="${{ github.ref_name == 'main' && 'prod' || 'hom' }}"
+          terraform apply -auto-approve -input=false \
+            -var-file="inventories/${ENV}/terraform.tfvars"
