@@ -78,7 +78,7 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ vars.AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
       - name: Confirmar identidade na AWS
         if: steps.creds.outputs.has == 'true'
@@ -196,7 +196,7 @@ jobs:
       #   uses: aws-actions/configure-aws-credentials@v4
       #   with:
       #     role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
-      #     aws-region: ${{ vars.AWS_REGION }}
+      #     aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
       - name: Terraform init
         working-directory: ${{ env.TF_DIR }}
