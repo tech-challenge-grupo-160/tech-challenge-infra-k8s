@@ -17,13 +17,15 @@ O banco de dados fica em [tech-challenge-infra-database](https://github.com/tech
 
 ## Status
 
-> ⚠️ **Em migração.** O conteúdo atual veio do monorepo com o histórico preservado e ainda provisiona um cluster **kind local** (Fase 2). A migração para cluster gerenciado é a issue [#60](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/60), e a nuvem depende da RFC [#56](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/56).
+> ⚠️ **Em migração.** A rede AWS (VPC, subnets, security groups) já está aqui. O cluster ainda não: é a issue [#60](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/60). O provisionamento do cluster `kind` da Fase 2 foi removido — o deploy agora é na AWS.
 
 ## Estrutura
 
 ```text
 infra/
-├── main.tf                   # Cluster, namespace e metrics-server
+├── rede.tf                   # VPC, subnets, internet gateway e rotas
+├── security-groups.tf        # SGs de ALB, nodes, banco e Lambda
+├── data.tf                   # LabRole e zonas de disponibilidade
 ├── variables.tf
 ├── versions.tf
 ├── outputs.tf

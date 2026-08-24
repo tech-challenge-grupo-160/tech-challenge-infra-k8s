@@ -1,42 +1,44 @@
-output "cluster_name" {
-  description = "Nome do cluster kind criado"
-  value       = kind_cluster.oficina_mecanica.name
+output "vpc_id" {
+  description = "Id da VPC."
+  value       = aws_vpc.principal.id
 }
 
-output "cluster_endpoint" {
-  description = "Endpoint da API do Kubernetes usado pelo kubectl e provider kubernetes"
-  value       = kind_cluster.oficina_mecanica.endpoint
+output "subnets_publicas" {
+  description = "Subnets publicas: ALB e nodes do cluster."
+  value       = aws_subnet.publica[*].id
 }
 
-output "kubeconfig_path" {
-  description = "Caminho do kubeconfig gerado pelo kind"
-  value       = kind_cluster.oficina_mecanica.kubeconfig_path
+output "subnets_privadas" {
+  description = "Subnets privadas: banco de dados."
+  value       = aws_subnet.privada[*].id
 }
 
-output "namespace" {
-  description = "Namespace criado para a aplicacao"
-  value       = kubernetes_namespace.oficina_mecanica.metadata[0].name
+output "sg_alb" {
+  description = "Security group do balanceador."
+  value       = aws_security_group.alb.id
 }
 
-output "next_steps" {
-  description = "Comandos para verificar o cluster apos o apply"
-  value       = <<-EOT
+output "sg_nodes" {
+  description = "Security group dos nodes do cluster."
+  value       = aws_security_group.nodes.id
+}
 
-    Cluster '${kind_cluster.oficina_mecanica.name}' pronto.
+output "sg_banco" {
+  description = "Security group do banco. Consumido pelo repositorio infra-database."
+  value       = aws_security_group.banco.id
+}
 
-    Verifique os nos:
-      kubectl get nodes
+output "sg_lambda" {
+  description = "Security group da Lambda de autenticacao."
+  value       = aws_security_group.lambda.id
+}
 
-    Aplique os manifestos da aplicacao:
-      kubectl apply -k k8s/
+output "lab_role_arn" {
+  description = "ARN da LabRole, unica role utilizavel no Learner Lab."
+  value       = data.aws_iam_role.lab.arn
+}
 
-    Verifique os pods:
-      kubectl get pods -n ${var.namespace}
-
-    Acesse a API via NodePort:
-      http://localhost:${var.api_host_port}
-
-    Para destruir o cluster quando nao precisar mais:
-      terraform destroy
-  EOT
+output "azs" {
+  description = "Zonas de disponibilidade em uso."
+  value       = local.azs
 }
