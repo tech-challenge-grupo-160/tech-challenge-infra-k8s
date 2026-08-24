@@ -56,6 +56,37 @@ jobs:
           echo "::error::Arquivos Terraform fora do padrao. Rode 'terraform fmt -recursive' e commite."
           exit 1
 
+      # A credencial do Learner Lab e temporaria e trocada a cada sessao.
+      # Quando os secrets nao existem, os passos abaixo sao pulados em vez de
+      # falhar - assim o CI continua util sem depender de sessao ativa.
+      - name: Verifica se ha credenciais da sessao
+        id: creds
+        env:
+          KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        run: |
+          if [ -n "$KEY" ]; then
+            echo "has=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Sem credenciais da sessao. Cadastre os secrets - issue #54."
+          fi
+
+      - name: Autenticar na AWS
+        if: steps.creds.outputs.has == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Confirmar identidade na AWS
+        if: steps.creds.outputs.has == 'true'
+        run: |
+          # Prova de autenticacao exigida pela issue #54.
+          # A conta e mascarada: os repositorios sao publicos.
+          aws sts get-caller-identity --query 'Arn' --output text | sed 's/[0-9]\{12\}/<conta>/'
+
   plan:
     name: Plan (${{ matrix.env }})
     runs-on: ubuntu-latest
