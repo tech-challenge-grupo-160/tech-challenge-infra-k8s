@@ -17,8 +17,10 @@ env:
   TF_IN_AUTOMATION: 'true'
   # Diretorio raiz do Terraform neste repositorio.
   TF_DIR: 'infra'
-  # Sem backend remoto configurado ainda. Quando a issue #57 entrar,
-  # remova o -backend=false para o init usar o state com lock.
+  # Usado apenas no job validate, que nao precisa de backend. O job de plan
+  # roda init sem esta flag: com -backend=false o plan aborta com
+  # "Backend initialization required".
+
   TF_INIT_ARGS: '-backend=false'
 
 jobs:
@@ -85,7 +87,7 @@ jobs:
       - name: Terraform init
         if: steps.check.outputs.exists == 'true'
         working-directory: ${{ env.TF_DIR }}
-        run: terraform init ${{ env.TF_INIT_ARGS }}
+        run: terraform init
 
       # Sem credencial de nuvem o provider nao consegue consultar a API remota.
       # Ate a issue #54 (OIDC) entrar, o plan e informativo e nao bloqueia o PR.
