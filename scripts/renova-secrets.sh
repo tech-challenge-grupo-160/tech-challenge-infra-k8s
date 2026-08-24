@@ -15,6 +15,14 @@
 #   AWS_PROFILE   perfil do ~/.aws/credentials (padrao: default)
 #   AWS_REGION    regiao (padrao: us-east-1, unica do Learner Lab)
 
+# Chamado como 'sh script.sh'? No Ubuntu o sh e o dash, que nao entende arrays
+# nem 'set -o pipefail' - e o erro que ele da ("Syntax error: \"(\" unexpected")
+# nao ajuda ninguem. Reexecuta sob bash em vez de falhar.
+# Este trecho precisa ser POSIX puro e vir antes de qualquer sintaxe de bash.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec bash "$0" "$@"
+fi
+
 set -euo pipefail
 
 ORG="tech-challenge-grupo-160"
