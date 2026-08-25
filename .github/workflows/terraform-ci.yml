@@ -109,6 +109,7 @@ jobs:
         id: check
         env:
           BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
         run: |
           ok=true
           if [ ! -f "${TF_DIR}/inventories/${{ matrix.env }}/terraform.tfvars" ]; then
@@ -121,7 +122,22 @@ jobs:
             echo "::notice::TF_STATE_BUCKET nao definida - rode o bootstrap (issue #57) e cadastre a variavel."
             ok=false
           fi
+          # A sessao do Learner Lab expira a cada ~4h. Sem credencial o plan e
+          # pulado, para o CI continuar util para fmt e validate nesse intervalo.
+          if [ -z "$KEY" ]; then
+            echo "::notice::Sem credenciais da sessao - rode scripts/renova-secrets.sh."
+            ok=false
+          fi
           echo "exists=$ok" >> "$GITHUB_OUTPUT"
+
+      - name: Autenticar na AWS
+        if: steps.check.outputs.exists == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
       - name: Terraform init
         if: steps.check.outputs.exists == 'true'
@@ -133,11 +149,11 @@ jobs:
             -backend-config="region=${{ vars.AWS_REGION || 'us-east-1' }}" \
             -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE || 'tc-grupo160-tflock' }}"
 
-      # Sem credencial de nuvem o provider nao consegue consultar a API remota.
-      # Ate a issue #54 (OIDC) entrar, o plan e informativo e nao bloqueia o PR.
+      # Com as credenciais cadastradas (#54), um plan quebrado passa a bloquear
+      # o PR. Antes tinha continue-on-error porque falharia sempre por falta de
+      # credencial - e isso acabava escondendo erro de verdade.
       - name: Terraform plan
         if: steps.check.outputs.exists == 'true'
-        continue-on-error: true
         working-directory: ${{ env.TF_DIR }}
         run: |
           terraform plan -no-color -input=false \
@@ -165,7 +181,7 @@ jobs:
             } catch (e) {
               body = `### Terraform plan — \`${env}\`\n\nNao foi possivel ler a saida do plan. Veja o log do job.`;
             }
-            body += '\n\n> Sem credenciais de nuvem configuradas, o plan e informativo. Habilitar na issue #54 (OIDC).';
+            body += `\n\n> Plan real contra a AWS. O apply roda ao mergear em \`homolog\` ou \`main\`.`;
 
             const marker = `<!-- tf-plan-${env} -->`;
             const { data: comments } = await github.rest.issues.listComments({
@@ -191,10 +207,8 @@ jobs:
     name: Apply
     runs-on: ubuntu-latest
     needs: validate
-    # DESABILITADO ate existir autenticacao OIDC com a nuvem (issue #54).
-    # Para habilitar, troque a linha abaixo por:
-    #   if: github.event_name == 'push' && (github.ref_name == 'homolog' || github.ref_name == 'main')
-    if: false
+    # So a partir das branches de ambiente. develop nunca aplica.
+    if: github.event_name == 'push' && (github.ref_name == 'homolog' || github.ref_name == 'main')
     environment: ${{ github.ref_name == 'main' && 'producao' || 'homologacao' }}
     steps:
       - name: Checkout
@@ -205,19 +219,61 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      # - name: Autenticar na nuvem via OIDC
-      #   uses: aws-actions/configure-aws-credentials@v4
-      #   with:
-      #     role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
-      #     aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      # Aqui a credencial e obrigatoria: sem ela nao ha apply, entao falhar e
+      # o comportamento correto - diferente do plan, que e pulado.
+      - name: Exige credenciais e backend
+        env:
+          KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::Sem credenciais da AWS. Rode scripts/renova-secrets.sh."
+            exit 1
+          fi
+          if [ -z "$BUCKET" ]; then
+            echo "::error::TF_STATE_BUCKET nao definida. Aplique o bootstrap e cadastre a variavel."
+            exit 1
+          fi
 
+      - name: Autenticar na AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Resolver ambiente
+        id: amb
+        run: |
+          ENV="hom"; [ "${{ github.ref_name }}" = "main" ] && ENV="prod"
+          echo "env=$ENV" >> "$GITHUB_OUTPUT"
+          echo "Aplicando o ambiente: $ENV"
+
+      # O state e separado por ambiente: hom e prod nunca compartilham arquivo.
       - name: Terraform init
         working-directory: ${{ env.TF_DIR }}
-        run: terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ steps.amb.outputs.env }}/rede.tfstate" \
+            -backend-config="region=${{ vars.AWS_REGION || 'us-east-1' }}" \
+            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE || 'tc-grupo160-tflock' }}"
 
       - name: Terraform apply
         working-directory: ${{ env.TF_DIR }}
         run: |
-          ENV="${{ github.ref_name == 'main' && 'prod' || 'hom' }}"
           terraform apply -auto-approve -input=false \
-            -var-file="inventories/${ENV}/terraform.tfvars"
+            -var-file="inventories/${{ steps.amb.outputs.env }}/terraform.tfvars"
+
+      - name: Resumo do que existe agora
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          {
+            echo "### Apply concluido - ambiente \`${{ steps.amb.outputs.env }}\`"
+            echo ""
+            echo '```'
+            # outputs sao ids de recurso, nao ha segredo aqui
+            terraform output
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
