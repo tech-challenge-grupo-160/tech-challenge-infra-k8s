@@ -1,0 +1,31 @@
+# Normalizacao de finais de linha.
+#
+# O Git for Windows instala com core.autocrlf=true, que converte LF para CRLF
+# no checkout. O arquivo no repositorio continua correto, mas a copia em disco
+# vem com \r - e o bash le o \r como parte do comando:
+#
+#   ./renova-secrets.sh: line 17: $'\r': command not found
+#   ./renova-secrets.sh: line 39: syntax error near unexpected token `$'do\r''
+#
+# O eol=lf abaixo vence o autocrlf de cada maquina e garante LF no checkout,
+# em qualquer sistema operacional.
+
+* text=auto
+
+# Scripts: LF sempre. Sao executados por bash, que nao tolera CR.
+*.sh text eol=lf
+
+# Terraform e manifests: lidos por ferramentas que assumem LF.
+*.tf      text eol=lf
+*.tfvars  text eol=lf
+*.hcl     text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.json    text eol=lf
+*.md      text eol=lf
+
+# Binarios: nunca converter.
+*.png  binary
+*.jpg  binary
+*.pdf  binary
+*.exe  binary
