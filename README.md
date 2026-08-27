@@ -47,7 +47,7 @@ k8s/
 | IaC | Terraform |
 | Orquestração | Kubernetes |
 | Manifests | Kustomize |
-| Nuvem | A definir — RFC [#56](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/56) |
+| Nuvem | AWS, região `us-east-1` — [RFC-0001](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/rfcs/0001-escolha-da-nuvem.md) |
 
 ## Escalabilidade
 
@@ -131,11 +131,13 @@ Pipeline em GitHub Actions ([issue #51](https://github.com/tech-challenge-grupo-
 | Merge em `homolog` | `apply` no ambiente de homologação |
 | Merge em `main` | `apply` no ambiente de produção |
 
-Autenticação por OIDC ([issue #54](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/54)) — sem credencial estática.
+Autenticação com as **credenciais temporárias da sessão** do Learner Lab, cadastradas como secrets do repositório — ver [Credenciais da AWS nos pipelines](#credenciais-da-aws-nos-pipelines).
+
+O desenho previsto era OIDC, sem credencial estática ([issue #54](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/54)). O ambiente bloqueia `iam:CreateOpenIDConnectProvider`, o que o inviabiliza. A alternativa foi aprovada pelo professor em 24/08 e está registrada como **limitação do ambiente, não escolha de arquitetura**, na [RFC-0001](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/rfcs/0001-escolha-da-nuvem.md).
 
 ## Arquitetura
 
-Diagrama da arquitetura na nuvem em [docs/diagrams](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/master/docs/diagrams) no repositório principal.
+Diagrama da arquitetura na nuvem em [docs/diagrams](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/tree/develop/docs/diagrams) no repositório principal — em especial o `C4_04_AWS_Deployment_Diagram.puml`.
 
 ## Repositórios do projeto
 
