@@ -151,3 +151,70 @@ Diagrama da arquitetura na nuvem em [docs/diagrams](https://github.com/tech-chal
 ## Contribuição
 
 Branch `main` protegida — sem commits diretos. Toda mudança entra por Pull Request com pelo menos uma aprovação.
+
+## Segredo de assinatura do JWT
+
+A chave HMAC que assina os tokens vive no **AWS Secrets Manager**, em
+`tc-grupo160/<ambiente>/jwt-signing-key`, criada pelo Terraform em
+[`infra/secrets.tf`](infra/secrets.tf). Nunca é versionada.
+
+Três consumidores leem a mesma chave em runtime:
+
+| Consumidor | Como recebe | Quando lê |
+|---|---|---|
+| Lambda de autenticação | env `JWT_SECRET_ID` com o **nome** do segredo | cold start |
+| Lambda authorizer | idem | cold start |
+| API .NET | config `Jwt:SecretId` com o **nome** do segredo | startup do pod |
+
+Nenhum deles recebe o valor por variável de ambiente. Se a variável do nome não
+estiver definida e não houver chave local, a inicialização **falha** — não há
+valor padrão. Essa decisão é deliberada: um default em repositório público é uma
+chave que qualquer pessoa lê.
+
+### Procedimento de rotação
+
+Rotação é **manual e com janela**. Não há duas chaves ativas ao mesmo tempo, então
+todos os tokens em circulação são invalidados no momento da troca. Com expiração
+de 60 minutos e sem tráfego real, o custo é aceitável nesta fase — a alternativa
+sem downtime (duas chaves identificadas por `kid`) está registrada na
+[RFC-0002](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/rfcs/0002-autenticacao-por-cpf-e-api-gateway.md)
+como o caminho correto, não implementado.
+
+**1. Gerar e gravar a chave nova**
+
+```bash
+terraform -chdir=infra taint random_password.jwt_signing_key
+```
+
+```bash
+terraform -chdir=infra apply -var-file=inventories/hom/terraform.tfvars
+```
+
+**2. Forçar as Lambdas a reler**
+
+Elas leem no cold start, então basta publicar uma nova versão da configuração:
+
+```bash
+aws lambda update-function-configuration --function-name tc-grupo160-auth-hom --description "rotacao $(date +%F)"
+```
+
+**3. Reiniciar os pods da API**
+
+Este passo é obrigatório: a API lê no startup.
+
+```bash
+kubectl rollout restart deployment/oficina-api
+```
+
+**4. Conferir**
+
+```bash
+kubectl rollout status deployment/oficina-api
+```
+
+Autentique um cliente e chame uma rota protegida. Se voltar `401`, algum
+consumidor ficou para trás — quase sempre o passo 3.
+
+> ⚠️ Executar os passos fora de ordem deixa a Lambda assinando com a chave nova
+> enquanto a API ainda valida com a antiga. O sintoma é `401` em todas as rotas
+> protegidas, com o login funcionando normalmente.
