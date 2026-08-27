@@ -85,6 +85,30 @@ O script lê o perfil local do `~/.aws/credentials` e publica nos quatro reposit
 | `./scripts/renova-secrets.sh --check` | Mostra só nomes e datas dos secrets |
 | `./scripts/renova-secrets.sh --dry-run` | Mostra o que faria, sem alterar |
 
+### Rodando os scripts no Windows
+
+**Use o Git Bash.** Em máquina com WSL instalado, `bash` no PowerShell resolve para `C:\Windows\System32\bash.exe`, que é o launcher do WSL — e lá o script quebra de três formas diferentes, nenhuma delas apontando para a causa real:
+
+| Sintoma | Causa |
+|---|---|
+| `$'\r': command not found` e erro de sintaxe no `do` | Checkout com CRLF. Resolvido pelo [`.gitattributes`](.gitattributes) — mas só depois de um checkout novo |
+| `ERRO: 'gh' nao encontrado no PATH` | No WSL os binários do Windows aparecem como `gh.exe`; o `command -v gh` não os encontra |
+| Perfil sem credenciais, mesmo com o bloco colado | **O mais traiçoeiro:** o `$HOME` do WSL é `/home/<user>`, então o script lê um `~/.aws/credentials` diferente do `C:\Users\<voce>\.aws\credentials` onde você colou o bloco |
+
+Chamando o Git Bash explicitamente do PowerShell:
+
+```powershell
+& "C:\Program Files\Git\bin\bash.exe" ./scripts/renova-secrets.sh --dry-run
+```
+
+Mais prático: abrir o **Git Bash** direto pelo menu Iniciar. Ali `$HOME` é `C:\Users\<voce>`, e `gh`, `aws`, `terraform` e `kubectl` estão todos no PATH — `./scripts/renova-secrets.sh` funciona sem prefixo.
+
+> Se você já tinha o repositório clonado antes do `.gitattributes`, force a renormalização uma vez:
+>
+> ```bash
+> git rm --cached -r . && git reset --hard
+> ```
+
 ### Como obter as credenciais
 
 No painel do Learner Lab: **AWS Details → AWS CLI**. Copie o bloco para o `~/.aws/credentials`, no perfil `default`.
