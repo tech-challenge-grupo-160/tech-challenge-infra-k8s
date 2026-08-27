@@ -96,10 +96,22 @@ resource "aws_apigatewayv2_stage" "principal" {
 # --------------------------------------------------- rota de autenticacao
 
 resource "aws_apigatewayv2_integration" "auth_lambda" {
-  api_id                 = aws_apigatewayv2_api.principal.id
-  integration_type       = "AWS_PROXY"
-  integration_uri        = local.lambda_auth_arn
-  payload_format_version = "2.0"
+  api_id           = aws_apigatewayv2_api.principal.id
+  integration_type = "AWS_PROXY"
+  integration_uri  = local.lambda_auth_arn
+  # 1.0, nao 2.0. O handler recebe APIGatewayProxyRequest, que e o formato 1.0.
+  # No evento 2.0 o metodo vive em requestContext.http.method e o campo
+  # httpMethod nem existe, entao a desserializacao deixa HttpMethod nulo e a
+  # funcao devolve 405 para toda requisicao - inclusive POST.
+  #
+  # Diagnosticado em 2026-08-27 no primeiro apply de dev: o gateway entregava
+  # o evento, a Lambda respondia "Metodo nao permitido: ." com o metodo vazio.
+  #
+  # 2.0 e o padrao do HTTP API e seria a escolha natural para codigo novo.
+  # Migrar exigiria trocar o handler para APIGatewayHttpApiV2ProxyRequest e
+  # APIGatewayHttpApiV2ProxyResponse no repositorio da Lambda - alinhar a
+  # integracao ao codigo existente resolve com uma linha e sem risco.
+  payload_format_version = "1.0"
   timeout_milliseconds   = 29000
 }
 
