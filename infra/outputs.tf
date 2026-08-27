@@ -67,3 +67,13 @@ output "gateway_rotas_do_cluster_ativas" {
   description = "Falso enquanto alb_listener_arn estiver vazio: so a rota de autenticacao existe."
   value       = local.integrar_cluster
 }
+
+output "sg_endpoints" {
+  description = "Security group dos endpoints de interface da VPC."
+  value       = aws_security_group.endpoints.id
+}
+
+output "endpoint_secrets_manager" {
+  description = "Id do endpoint de interface do Secrets Manager. A Lambda na VPC depende dele para ler segredos."
+  value       = aws_vpc_endpoint.secrets_manager.id
+}
