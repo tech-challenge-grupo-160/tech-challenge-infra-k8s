@@ -36,3 +36,38 @@ variable "quantidade_azs" {
     error_message = "O subnet group do RDS exige ao menos 2 AZs."
   }
 }
+
+variable "lambda_auth_nome" {
+  description = "Nome da funcao Lambda de autenticacao. Vazio usa <project>-auth-<ambiente>."
+  type        = string
+  default     = ""
+}
+
+variable "alb_listener_arn" {
+  description = <<-EOT
+    ARN do listener do load balancer que expoe a API no cluster.
+    Enquanto vazio, o gateway sobe apenas com a rota de autenticacao: o
+    VPC Link e as rotas /api/v1 ficam de fora. Preencher quando o cluster
+    (issue #60) e o ingress (issue #64) existirem.
+  EOT
+  type        = string
+  default     = ""
+}
+
+variable "gateway_rate_limit" {
+  description = "Requisicoes por segundo por rota no gateway."
+  type        = number
+  default     = 50
+}
+
+variable "gateway_burst_limit" {
+  description = "Rajada permitida acima do rate limit."
+  type        = number
+  default     = 100
+}
+
+variable "gateway_log_retention_days" {
+  description = "Retencao dos logs de acesso do gateway. Baixa de proposito: o orcamento do lab e de US$ 100."
+  type        = number
+  default     = 7
+}
