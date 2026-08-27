@@ -218,14 +218,18 @@ jobs:
     name: Apply
     runs-on: ubuntu-latest
     needs: validate
-    # Por push, so a partir das branches de ambiente: homolog aplica hom e main
-    # aplica prod. Por workflow_dispatch, qualquer branch aplica o ambiente
-    # escolhido no input - e como se aplica dev, e como se sobe a infra sem
-    # precisar promover branch.
+    # Cada branch aplica o seu ambiente: develop aplica dev, homolog aplica hom
+    # e main aplica prod. Por workflow_dispatch, qualquer branch aplica o
+    # ambiente escolhido no input.
+    #
+    # develop aplicando dev e mudanca deliberada: o ambiente de desenvolvimento
+    # passa a acompanhar a branch sem ninguem precisar lembrar de disparar o
+    # workflow. O preco e que todo merge em develop toca a AWS - o plan do PR
+    # continua sendo o momento de revisar o que vai acontecer.
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && (github.ref_name == 'homolog' || github.ref_name == 'main'))
-    environment: ${{ fromJSON('{"dev":"desenvolvimento","hom":"homologacao","prod":"producao"}')[github.event_name == 'workflow_dispatch' && inputs.ambiente || (github.ref_name == 'main' && 'prod' || 'hom')] }}
+      (github.event_name == 'push' && (github.ref_name == 'develop' || github.ref_name == 'homolog' || github.ref_name == 'main'))
+    environment: ${{ fromJSON('{"dev":"desenvolvimento","hom":"homologacao","prod":"producao"}')[github.event_name == 'workflow_dispatch' && inputs.ambiente || (github.ref_name == 'main' && 'prod' || (github.ref_name == 'homolog' && 'hom' || 'dev'))] }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -265,7 +269,11 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             ENV="${{ inputs.ambiente }}"
           else
-            ENV="hom"; [ "${{ github.ref_name }}" = "main" ] && ENV="prod"
+            case "${{ github.ref_name }}" in
+              main)    ENV="prod" ;;
+              homolog) ENV="hom" ;;
+              *)       ENV="dev" ;;
+            esac
           fi
           echo "env=$ENV" >> "$GITHUB_OUTPUT"
           echo "Aplicando o ambiente: $ENV  (branch: ${{ github.ref_name }})"
