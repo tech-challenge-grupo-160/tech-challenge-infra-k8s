@@ -42,3 +42,13 @@ output "azs" {
   description = "Zonas de disponibilidade em uso."
   value       = local.azs
 }
+
+output "jwt_secret_name" {
+  description = "Nome do secret com a chave de assinatura do JWT. Consumido pela Lambda, pelo authorizer e pela API - nunca o valor."
+  value       = aws_secretsmanager_secret.jwt_signing_key.name
+}
+
+output "jwt_secret_arn" {
+  description = "ARN do secret da chave de assinatura do JWT."
+  value       = aws_secretsmanager_secret.jwt_signing_key.arn
+}
