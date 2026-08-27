@@ -172,6 +172,11 @@ jobs:
             let body;
             try {
               let out = fs.readFileSync(`plan-${env}.txt`, 'utf8');
+              // O repositorio e publico e o plan vai inteiro para o comentario.
+              // Mascarar aqui, e nao na geracao do arquivo, garante que
+              // qualquer caminho que leve ao comentario passe pela mascara.
+              // 12 digitos seguidos na saida do terraform e id de conta AWS.
+              out = out.replace(/\d{12}/g, '<conta>');
               // Comentario do GitHub tem limite de 65536 caracteres
               const LIMIT = 60000;
               if (out.length > LIMIT) {
@@ -269,11 +274,16 @@ jobs:
       - name: Resumo do que existe agora
         working-directory: ${{ env.TF_DIR }}
         run: |
+          # Sem pipefail o `terraform output | sed` devolveria o codigo do sed,
+          # e uma falha do terraform passaria despercebida.
+          set -o pipefail
           {
             echo "### Apply concluido - ambiente \`${{ steps.amb.outputs.env }}\`"
             echo ""
             echo '```'
-            # outputs sao ids de recurso, nao ha segredo aqui
-            terraform output
+            # Os valores sao ids de recurso, nao ha segredo aqui - mas
+            # lab_role_arn e os ARNs carregam o id da conta, e o resumo do job
+            # e publico como o repositorio. Mesma mascara do comentario do plan.
+            terraform output | sed 's/[0-9]\{12\}/<conta>/g'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
