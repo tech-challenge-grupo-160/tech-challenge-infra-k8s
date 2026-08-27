@@ -152,6 +152,35 @@ Diagrama da arquitetura na nuvem em [docs/diagrams](https://github.com/tech-chal
 
 Branch `main` protegida — sem commits diretos. Toda mudança entra por Pull Request com pelo menos uma aprovação.
 
+## API Gateway
+
+Porta de entrada da aplicacao, em [`infra/api-gateway.tf`](infra/api-gateway.tf). HTTP API (v2), escolhido na [RFC-0002](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/rfcs/0002-autenticacao-por-cpf-e-api-gateway.md).
+
+| Rota | Destino | Publica |
+|---|---|---|
+| `POST /auth` | Lambda de autenticacao | Sim |
+| `POST /api/v1/auth/login` | API no cluster | Sim |
+| `ANY /api/v1/{proxy+}` | API no cluster | Nao - recebe o authorizer na issue #43 |
+| `GET /health/live` | API no cluster | Sim |
+
+A classificacao vem da [matriz de autorizacao](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/MATRIZ_AUTORIZACAO.md). O `/health` e o `/health/ready` **nao** sao roteados: o corpo do `/health` expoe `description` dos checks.
+
+### As rotas do cluster estao desligadas
+
+Enquanto `alb_listener_arn` estiver vazio, sobem apenas o gateway e a rota `POST /auth`. O VPC Link e as rotas `/api/v1` ficam de fora, porque ainda nao existe cluster ([#60](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/60)) nem ingress ([#64](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/64)) para apontar.
+
+Ao criar o load balancer, preencha a variavel no inventario do ambiente:
+
+```hcl
+alb_listener_arn = "arn:aws:elasticloadbalancing:us-east-1:<conta>:listener/app/..."
+```
+
+O output `gateway_rotas_do_cluster_ativas` diz se elas estao no ar.
+
+### Throttling e logs
+
+50 req/s por rota, com rajada de 100 (`gateway_rate_limit` e `gateway_burst_limit`). Logs de acesso em CloudWatch, `/aws/apigateway/tc-grupo160-<ambiente>`, retencao de 7 dias — curta de proposito, pelo orcamento do lab.
+
 ## Segredo de assinatura do JWT
 
 A chave HMAC que assina os tokens vive no **AWS Secrets Manager**, em

@@ -52,3 +52,18 @@ output "jwt_secret_arn" {
   description = "ARN do secret da chave de assinatura do JWT."
   value       = aws_secretsmanager_secret.jwt_signing_key.arn
 }
+
+output "gateway_url" {
+  description = "URL base do API Gateway. Rota de autenticacao: POST <url>/auth."
+  value       = aws_apigatewayv2_stage.principal.invoke_url
+}
+
+output "gateway_api_id" {
+  description = "Id do HTTP API. Consumido pela issue #43 ao criar o authorizer."
+  value       = aws_apigatewayv2_api.principal.id
+}
+
+output "gateway_rotas_do_cluster_ativas" {
+  description = "Falso enquanto alb_listener_arn estiver vazio: so a rota de autenticacao existe."
+  value       = local.integrar_cluster
+}
