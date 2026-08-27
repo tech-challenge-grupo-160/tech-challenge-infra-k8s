@@ -178,3 +178,28 @@ resource "aws_apigatewayv2_route" "health_live" {
   target             = "integrations/${aws_apigatewayv2_integration.api_cluster[0].id}"
   authorization_type = "NONE"
 }
+
+# ------------------------------------------------- validacao da integracao
+#
+# Recupera a checagem que um `data aws_lambda_function` daria, sem o efeito
+# colateral dele: em bloco `check`, uma falha de leitura vira **warning**, nao
+# erro, entao o plan de um ambiente cuja funcao ainda nao foi publicada segue
+# passando e o PR nao fica bloqueado.
+#
+# Verificado em 2026-08-27 contra a conta: hom (funcao publicada) planeja
+# limpo; prod (funcao inexistente) emite warning e o plan conclui.
+#
+# O que isso protege: o nome da funcao e convencao duplicada em dois
+# repositorios - o pipeline do lambda-auth publica `<project>-auth-<sufixo>` e
+# aqui montamos o mesmo nome. Nada liga os dois. Se um lado renomear, o warning
+# aparece no plan em vez de o apply falhar com ResourceNotFoundException.
+check "lambda_auth_publicada" {
+  data "aws_lambda_function" "auth" {
+    function_name = local.lambda_auth_nome
+  }
+
+  assert {
+    condition     = data.aws_lambda_function.auth.arn == local.lambda_auth_arn
+    error_message = "O ARN publicado da funcao ${local.lambda_auth_nome} diverge do montado aqui. Confira a convencao de nome no pipeline do tech-challenge-lambda-auth."
+  }
+}
