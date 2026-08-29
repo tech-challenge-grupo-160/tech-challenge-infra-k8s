@@ -1,5 +1,7 @@
-# O isolamento aqui compensa a ausencia de NAT Gateway: os nodes estao em
-# subnet publica, entao a protecao do banco depende inteiramente do SG.
+# Desde 29/08 os nodes ficam em subnet privada, atras do NAT (issue #60), entao
+# o SG deixou de ser a unica barreira que protege o banco. Continua sendo a
+# barreira principal: nenhuma regra de entrada usa cidr_ipv4 aberto - o acesso
+# ao PostgreSQL e concedido por referencia a outro security group.
 
 resource "aws_security_group" "alb" {
   name        = "${local.nome}-alb"

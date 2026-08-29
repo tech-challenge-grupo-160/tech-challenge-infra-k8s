@@ -17,9 +17,12 @@ resource "aws_internet_gateway" "principal" {
 }
 
 # ---------------------------------------------------------------- subnets
-# Publicas: ALB e nodes do cluster. Os nodes ficam aqui, e nao em subnet
-# privada, porque sem NAT Gateway (~US$ 32/mes) nao teriam saida para
-# internet - decisao de custo registrada na issue #58 e na RFC-0001.
+# Publicas: ALB e NAT Gateway.
+#
+# Ate 29/08 os nodes do cluster tambem ficavam aqui, porque sem NAT Gateway eles
+# nao teriam saida para a internet - decisao de custo da RFC-0001. Revista: o
+# credito e renovavel, a #60 exige nodes em subnet privada, e o NAT entrou em
+# nat.tf. Os nodes agora ficam nas privadas.
 resource "aws_subnet" "publica" {
   count = var.quantidade_azs
 
@@ -36,7 +39,9 @@ resource "aws_subnet" "publica" {
   }
 }
 
-# Privadas: apenas o banco. Sem rota para a internet, por design.
+# Privadas: banco, Lambda de autenticacao e nodes do cluster. A rota default
+# para o NAT so existe com criar_cluster ligado - ver nat.tf. Sem ela, quem
+# esta aqui alcanca apenas a VPC e os VPC endpoints.
 resource "aws_subnet" "privada" {
   count = var.quantidade_azs
 
@@ -69,7 +74,9 @@ resource "aws_route_table_association" "publica" {
   route_table_id = aws_route_table.publica.id
 }
 
-# Sem rota default: a subnet privada nao tem saida para a internet.
+# A rota default entra em nat.tf, condicionada a criar_cluster. Sem cluster, a
+# subnet privada segue sem saida para a internet - e o endpoint de interface do
+# Secrets Manager e o que mantem a Lambda funcionando nesse cenario.
 resource "aws_route_table" "privada" {
   vpc_id = aws_vpc.principal.id
   tags   = { Name = "${local.nome}-privada" }
