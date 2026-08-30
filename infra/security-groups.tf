@@ -36,6 +36,14 @@ resource "aws_vpc_security_group_egress_rule" "alb_saida" {
   ip_protocol       = "-1"
 }
 
+# ATENCAO ao nome: apesar de "nodes", este security group NAO fica nas
+# instancias dos nodes. Ele entra em vpc_config.security_group_ids do cluster,
+# o que o coloca nas ENIs do control plane. Um node group gerenciado sem launch
+# template recebe apenas o `eks-cluster-sg-<cluster>`, criado pelo EKS.
+#
+# Consequencia pratica: regras que liberam acesso "a partir dos nodes"
+# referenciando este SG nao valem para pod algum. Ver a regra
+# banco_dos_nodes_eks em cluster.tf, que e a que de fato libera o banco.
 resource "aws_security_group" "nodes" {
   name        = "${local.nome}-nodes"
   description = "Nodes do cluster Kubernetes"
