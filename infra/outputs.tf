@@ -112,6 +112,11 @@ output "cluster_kubeconfig_comando" {
   ]) : null
 }
 
+output "ecr_api_url" {
+  description = "URL do repositorio de imagens da API. Destino do docker push no deploy."
+  value       = aws_ecr_repository.api.repository_url
+}
+
 output "nat_ip_publico" {
   description = "IP fixo de saida das subnets privadas. Util para liberar em firewall de terceiros."
   value       = one(aws_eip.nat[*].public_ip)

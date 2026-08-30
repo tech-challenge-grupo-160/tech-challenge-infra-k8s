@@ -1,0 +1,12 @@
+# Base da API, compartilhada pelo fluxo local (k8s/kustomization.yaml) e pelo
+# overlay de nuvem (k8s/nuvem). Kustomize so permite que um overlay referencie
+# diretorios que sejam bases, nunca arquivos soltos acima dele - por isso este
+# arquivo existe.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
