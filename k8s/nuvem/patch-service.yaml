@@ -1,0 +1,17 @@
+# O Service do fluxo local e NodePort com porta fixa, que so faz sentido com
+# kind. Aqui vira ClusterIP: quem expoe a API para fora e o Ingress/ALB da
+# issue #64, e ate ela existir o acesso e por `kubectl port-forward`.
+#
+# Deliberadamente NAO e LoadBalancer. Um Service do tipo LoadBalancer cria um
+# ELB classico por conta propria, fora do Terraform, que ninguem destroi junto
+# com o resto e que continua cobrando. O ALB entra pela #64, como codigo.
+apiVersion: v1
+kind: Service
+metadata:
+  name: oficina-mecanica-api
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 8080
+      nodePort: null

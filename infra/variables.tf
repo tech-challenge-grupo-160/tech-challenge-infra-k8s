@@ -37,6 +37,16 @@ variable "quantidade_azs" {
   }
 }
 
+variable "ecr_imagens_mantidas" {
+  description = <<-EOT
+    Quantas imagens o repositorio da API guarda antes de expirar as mais
+    antigas. Suficiente para rollback de alguns deploys sem deixar o registry
+    crescer sem limite.
+  EOT
+  type        = number
+  default     = 10
+}
+
 variable "criar_cluster" {
   description = <<-EOT
     Cria o cluster EKS, o node group e o NAT Gateway das subnets privadas.
