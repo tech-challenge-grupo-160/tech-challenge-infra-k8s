@@ -116,3 +116,35 @@ resource "aws_eks_addon" "metrics_server" {
   # Precisa de node pronto para agendar o pod.
   depends_on = [aws_eks_node_group.principal]
 }
+
+# --------------------------------------------- acesso dos pods ao banco
+#
+# Um node group gerenciado sem launch template recebe APENAS o security group
+# que o proprio EKS cria - o `eks-cluster-sg-<cluster>`. O `sg_nodes` deste
+# repositorio vai em vpc_config.security_group_ids, e isso o coloca nas ENIs do
+# control plane, nao nas instancias dos nodes.
+#
+# Como o VPC CNI da aos pods IPs secundarios das ENIs do node, o trafego que sai
+# de um pod carrega o security group do node - ou seja, o do EKS. A regra que o
+# security-groups.tf cria liberando o `sg_nodes` no PostgreSQL nao vale para
+# nenhum node de verdade.
+#
+# Diagnosticado em 2026-08-30 no primeiro deploy da API: os pods subiam e
+# falhavam com "Failed to connect to <ip>:5432 - Timeout during connection
+# attempt", que e timeout de rede e nao erro de credencial.
+#
+# A alternativa estrutural seria um launch template no node group so para
+# atachar o `sg_nodes` as instancias, o que tornaria todas as regras existentes
+# verdadeiras de novo. Fica registrado como o caminho mais correto; nao foi
+# adotado agora porque launch template com node group gerenciado tem arestas
+# proprias (AMI e user data) e o prazo nao comporta o risco.
+resource "aws_vpc_security_group_ingress_rule" "banco_dos_nodes_eks" {
+  count = var.criar_cluster ? 1 : 0
+
+  security_group_id            = aws_security_group.banco.id
+  description                  = "PostgreSQL a partir dos nodes do EKS"
+  referenced_security_group_id = aws_eks_cluster.principal[0].vpc_config[0].cluster_security_group_id
+  from_port                    = 5432
+  to_port                      = 5432
+  ip_protocol                  = "tcp"
+}
