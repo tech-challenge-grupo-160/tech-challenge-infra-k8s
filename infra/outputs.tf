@@ -4,12 +4,12 @@ output "vpc_id" {
 }
 
 output "subnets_publicas" {
-  description = "Subnets publicas: ALB e nodes do cluster."
+  description = "Subnets publicas: ALB e NAT Gateway."
   value       = aws_subnet.publica[*].id
 }
 
 output "subnets_privadas" {
-  description = "Subnets privadas: banco de dados."
+  description = "Subnets privadas: banco de dados, Lambda e nodes do cluster."
   value       = aws_subnet.privada[*].id
 }
 
@@ -76,4 +76,43 @@ output "sg_endpoints" {
 output "endpoint_secrets_manager" {
   description = "Id do endpoint de interface do Secrets Manager. A Lambda na VPC depende dele para ler segredos."
   value       = aws_vpc_endpoint.secrets_manager.id
+}
+
+# ------------------------------------------------------------------ cluster
+#
+# Nulos enquanto criar_cluster estiver desligado. Quem consome deve tratar isso,
+# em vez de assumir que o cluster existe.
+
+output "cluster_existe" {
+  description = "Se o cluster EKS foi provisionado neste ambiente."
+  value       = var.criar_cluster
+}
+
+output "cluster_nome" {
+  description = "Nome do cluster EKS. Usado no `aws eks update-kubeconfig` das pipelines."
+  value       = one(aws_eks_cluster.principal[*].name)
+}
+
+output "cluster_endpoint" {
+  description = "Endpoint da API do cluster."
+  value       = one(aws_eks_cluster.principal[*].endpoint)
+}
+
+output "cluster_oidc_issuer" {
+  description = "Issuer OIDC do cluster, base para IRSA."
+  value       = one(aws_eks_cluster.principal[*].identity[0].oidc[0].issuer)
+}
+
+output "cluster_kubeconfig_comando" {
+  description = "Comando que gera o kubeconfig. E assim que as pipelines se conectam ao cluster."
+  value = var.criar_cluster ? join(" ", [
+    "aws eks update-kubeconfig",
+    "--region ${var.region}",
+    "--name ${aws_eks_cluster.principal[0].name}"
+  ]) : null
+}
+
+output "nat_ip_publico" {
+  description = "IP fixo de saida das subnets privadas. Util para liberar em firewall de terceiros."
+  value       = one(aws_eip.nat[*].public_ip)
 }
