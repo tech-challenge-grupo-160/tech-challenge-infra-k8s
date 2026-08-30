@@ -28,8 +28,8 @@ variable "notification_email" {
     E-mail para assinar os topicos SNS de notificacao (opcional, so para
     validacao manual/demo). Vazio por padrao - nenhuma assinatura e criada.
   EOT
-  type    = string
-  default = ""
+  type        = string
+  default     = ""
 }
 
 output "sns_topic_notificacoes_os_arn" {
