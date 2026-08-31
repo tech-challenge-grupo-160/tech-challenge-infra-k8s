@@ -117,6 +117,29 @@ variable "lambda_auth_nome" {
   default     = ""
 }
 
+variable "lambda_authorizer_nome" {
+  description = "Nome da funcao do Lambda authorizer. Vazio usa <project>-authorizer-<ambiente>."
+  type        = string
+  default     = ""
+}
+
+variable "authorizer_cache_ttl" {
+  description = <<-EOT
+    Segundos que o gateway guarda a resposta do authorizer, com o header
+    Authorization como chave. 300 e o valor da RFC-0002.
+
+    Zerar torna a expiracao do token exata na borda, ao custo de uma invocacao
+    da funcao por requisicao. Util para depurar o authorizer; caro em regime.
+  EOT
+  type        = number
+  default     = 300
+
+  validation {
+    condition     = var.authorizer_cache_ttl >= 0 && var.authorizer_cache_ttl <= 3600
+    error_message = "O TTL do authorizer precisa estar entre 0 e 3600 segundos."
+  }
+}
+
 variable "node_port_api" {
   description = <<-EOT
     Porta do NodePort em que o Service da API atende no cluster. E nela que o

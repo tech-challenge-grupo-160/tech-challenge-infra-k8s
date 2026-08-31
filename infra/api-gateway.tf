@@ -191,15 +191,20 @@ resource "aws_apigatewayv2_route" "login_api" {
   authorization_type = "NONE"
 }
 
-# Tudo mais da aplicacao. As 52 rotas protegidas da matriz caem aqui, e e
-# esta rota que recebe o authorizer na issue #43.
+# Tudo mais da aplicacao. As 52 rotas protegidas da matriz caem aqui, e e a
+# unica rota do gateway com authorizer - ver authorizer.tf (issue #43).
+#
+# Requisicao sem header Authorization e recusada com 401 antes de sair do
+# gateway; com header, o authorizer valida o token e so entao o trafego
+# atravessa o VPC Link.
 resource "aws_apigatewayv2_route" "api" {
   count = local.integrar_cluster ? 1 : 0
 
   api_id             = aws_apigatewayv2_api.principal.id
   route_key          = "ANY /api/v1/{proxy+}"
   target             = "integrations/${aws_apigatewayv2_integration.api_cluster[0].id}"
-  authorization_type = "NONE"
+  authorization_type = "CUSTOM"
+  authorizer_id      = aws_apigatewayv2_authorizer.jwt[0].id
 }
 
 # Alvo do monitor de uptime (issue #72). Apenas /health/live: o /health
