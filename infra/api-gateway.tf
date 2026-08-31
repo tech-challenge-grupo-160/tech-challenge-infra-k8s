@@ -129,7 +129,19 @@ resource "aws_apigatewayv2_route" "auth" {
   authorization_type = "NONE"
 }
 
+# Ao contrario da integracao, que so monta um ARN, esta permissao exige que a
+# funcao EXISTA: a API AddPermission devolve 404 se ela nao estiver publicada.
+#
+# Num ambiente ja em uso isso nunca aparece, porque as funcoes foram publicadas
+# muito antes. Numa conta do zero, aparece: descoberto em 31/08, na primeira
+# subida completa pelo sobe-tudo.sh.
+#
+# A ordem correta e publicar as funcoes antes de aplicar o gateway - e o que o
+# script faz. A variavel existe para o caso de aplicar so a infraestrutura, sem
+# as aplicacoes, quando nao ha funcao para permitir.
 resource "aws_lambda_permission" "gateway_invoca_auth" {
+  count = var.lambdas_publicadas ? 1 : 0
+
   statement_id  = "AllowInvokeFromApiGateway"
   action        = "lambda:InvokeFunction"
   function_name = local.lambda_auth_nome
