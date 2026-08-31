@@ -71,7 +71,7 @@ resource "aws_apigatewayv2_authorizer" "jwt" {
 # Sem esta permissao o gateway nao consegue chamar a funcao e devolve 500 em
 # toda rota protegida. O source_arn restringe ao authorizer deste gateway.
 resource "aws_lambda_permission" "gateway_invoca_authorizer" {
-  count = local.integrar_cluster ? 1 : 0
+  count = local.integrar_cluster && var.lambdas_publicadas ? 1 : 0
 
   statement_id  = "AllowInvokeFromApiGatewayAuthorizer"
   action        = "lambda:InvokeFunction"

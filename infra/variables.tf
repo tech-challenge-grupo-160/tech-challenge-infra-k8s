@@ -117,6 +117,22 @@ variable "lambda_auth_nome" {
   default     = ""
 }
 
+variable "lambdas_publicadas" {
+  description = <<-EOT
+    Se as funcoes Lambda ja existem na conta.
+
+    A integracao do gateway apenas monta o ARN da funcao, e por isso tolera que
+    ela nao exista. A `aws_lambda_permission` nao: a API AddPermission devolve
+    404 se a funcao nao estiver publicada, e o apply falha.
+
+    Em operacao normal isso e sempre verdadeiro - o pipeline publica as funcoes
+    antes de o Terraform rodar. Desligar serve para aplicar so a infraestrutura,
+    sem as aplicacoes, quando nao ha funcao para permitir.
+  EOT
+  type        = bool
+  default     = true
+}
+
 variable "lambda_authorizer_nome" {
   description = "Nome da funcao do Lambda authorizer. Vazio usa <project>-authorizer-<ambiente>."
   type        = string
