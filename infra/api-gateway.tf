@@ -32,10 +32,14 @@ locals {
     local.lambda_auth_nome
   ])
 
-  # Enquanto nao houver cluster (issue #60) e ingress (issue #64) nao ha
-  # listener para apontar. O gateway sobe com a rota de autenticacao e as
-  # rotas da aplicacao entram quando a variavel for preenchida.
-  integrar_cluster = var.alb_listener_arn != ""
+  # As rotas da aplicacao existem quando existe cluster: o ALB interno da issue
+  # #64 nasce junto com ele, em alb.tf, e e para o listener dele que a
+  # integracao aponta.
+  #
+  # Ate 30/08 isto dependia de var.alb_listener_arn, preenchida a mao depois que
+  # alguem criasse o balanceador por fora. Com o ALB no mesmo Terraform, a
+  # referencia e direta e o passo manual desaparece.
+  integrar_cluster = var.criar_cluster
 }
 
 # ------------------------------------------------------------------- o gateway
@@ -141,8 +145,12 @@ resource "aws_lambda_permission" "gateway_invoca_auth" {
 resource "aws_apigatewayv2_vpc_link" "cluster" {
   count = local.integrar_cluster ? 1 : 0
 
-  name               = "${var.project}-${var.ambiente}-cluster"
-  subnet_ids         = aws_subnet.publica[*].id
+  name = "${var.project}-${var.ambiente}-cluster"
+
+  # Subnets privadas, nao publicas: o balanceador e interno e vive nelas. As
+  # ENIs do link compartilham o sg_alb com o ALB, e a regra auto-referenciada
+  # em alb.tf e o que permite uma alcancar a outra.
+  subnet_ids         = aws_subnet.privada[*].id
   security_group_ids = [aws_security_group.alb.id]
 }
 
@@ -152,9 +160,24 @@ resource "aws_apigatewayv2_integration" "api_cluster" {
   api_id             = aws_apigatewayv2_api.principal.id
   integration_type   = "HTTP_PROXY"
   integration_method = "ANY"
-  integration_uri    = var.alb_listener_arn
+  integration_uri    = aws_lb_listener.api[0].arn
   connection_type    = "VPC_LINK"
   connection_id      = aws_apigatewayv2_vpc_link.cluster[0].id
+
+  # Sem isto o gateway repassa o nome do estagio no caminho: uma chamada a
+  # /dev/health/live chega na API como /dev/health/live, e ela devolve 404 -
+  # nao conhece esse prefixo. Vale para todas as rotas do cluster.
+  #
+  # `$request.path` e o caminho JA sem o estagio, entao um unico mapeamento na
+  # integracao resolve as tres rotas de uma vez. A alternativa seria usar o
+  # estagio `$default`, que nao tem prefixo - descartada porque a issue #42 pede
+  # estagios de homologacao e producao configurados.
+  #
+  # Diagnosticado em 2026-08-30 no primeiro apply: /health/live respondia 200
+  # direto no ALB e 404 pelo gateway.
+  request_parameters = {
+    "overwrite:path" = "$request.path"
+  }
 }
 
 # Login administrativo do seed: publico, como o /auth. Precisa de rota

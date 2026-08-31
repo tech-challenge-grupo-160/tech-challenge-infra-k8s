@@ -112,6 +112,16 @@ output "cluster_kubeconfig_comando" {
   ]) : null
 }
 
+output "alb_dns" {
+  description = "DNS interno do balanceador da API. So alcancavel de dentro da VPC - a porta publica e o gateway."
+  value       = one(aws_lb.api[*].dns_name)
+}
+
+output "alb_listener_arn" {
+  description = "ARN do listener do balanceador. Alvo da integracao do API Gateway."
+  value       = one(aws_lb_listener.api[*].arn)
+}
+
 output "ecr_api_url" {
   description = "URL do repositorio de imagens da API. Destino do docker push no deploy."
   value       = aws_ecr_repository.api.repository_url

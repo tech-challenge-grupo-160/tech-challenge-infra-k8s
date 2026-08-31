@@ -117,15 +117,22 @@ variable "lambda_auth_nome" {
   default     = ""
 }
 
-variable "alb_listener_arn" {
+variable "node_port_api" {
   description = <<-EOT
-    ARN do listener do load balancer que expoe a API no cluster.
-    Enquanto vazio, o gateway sobe apenas com a rota de autenticacao: o
-    VPC Link e as rotas /api/v1 ficam de fora. Preencher quando o cluster
-    (issue #60) e o ingress (issue #64) existirem.
+    Porta do NodePort em que o Service da API atende no cluster. E nela que o
+    target group do balanceador registra os nodes.
+
+    Precisa casar com o nodePort do manifest em k8s/nuvem/patch-service.yaml.
+    Divergir aqui derruba o health check de todos os alvos e o ALB passa a
+    devolver 502.
   EOT
-  type        = string
-  default     = ""
+  type        = number
+  default     = 30080
+
+  validation {
+    condition     = var.node_port_api >= 30000 && var.node_port_api <= 32767
+    error_message = "NodePort precisa estar na faixa 30000-32767."
+  }
 }
 
 variable "gateway_rate_limit" {

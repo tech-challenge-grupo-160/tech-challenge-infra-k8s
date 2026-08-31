@@ -1,17 +1,23 @@
-# O Service do fluxo local e NodePort com porta fixa, que so faz sentido com
-# kind. Aqui vira ClusterIP: quem expoe a API para fora e o Ingress/ALB da
-# issue #64, e ate ela existir o acesso e por `kubectl port-forward`.
+# NodePort, e nao ClusterIP nem LoadBalancer.
 #
-# Deliberadamente NAO e LoadBalancer. Um Service do tipo LoadBalancer cria um
-# ELB classico por conta propria, fora do Terraform, que ninguem destroi junto
-# com o resto e que continua cobrando. O ALB entra pela #64, como codigo.
+# O balanceador da issue #64 e um ALB interno provisionado por Terraform, com
+# alvos do tipo instancia: ele entrega o trafego na porta 30080 de cada node, e
+# o kube-proxy encaminha ao pod. Sem NodePort nao ha porta para o target group
+# alcancar.
+#
+# Deliberadamente NAO e LoadBalancer. Um Service desse tipo faria o proprio
+# Kubernetes criar um ELB por conta, fora do Terraform, que ninguem destroi
+# junto com o resto e que continua cobrando.
+#
+# A porta precisa casar com var.node_port_api no Terraform. Divergir derruba o
+# health check de todos os alvos e o ALB passa a devolver 502.
 apiVersion: v1
 kind: Service
 metadata:
   name: oficina-mecanica-api
 spec:
-  type: ClusterIP
+  type: NodePort
   ports:
     - port: 80
       targetPort: 8080
-      nodePort: null
+      nodePort: 30080
