@@ -8,23 +8,54 @@ Provisiona, via Terraform, a rede e o cluster Kubernetes onde a API roda, além 
 
 Responsabilidades deste repositório:
 
-- Rede base (VPC, subnets públicas e privadas, security groups)
-- Cluster Kubernetes gerenciado com node group escalável
+- Rede base (VPC, subnets públicas e privadas, NAT Gateway, security groups)
+- Cluster EKS com node group em subnet privada
+- API Gateway, com a rota de autenticação e o authorizer JWT
+- Balanceador interno que expõe a API do cluster ao gateway
+- Registry das imagens da API (ECR)
+- Segredo de assinatura do JWT no Secrets Manager
 - Manifests da API e do HPA
-- Ingress e TLS
 
 O banco de dados fica em [tech-challenge-infra-database](https://github.com/tech-challenge-grupo-160/tech-challenge-infra-database). A imagem da API é construída na [aplicação principal](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica).
 
 ## Status
 
-> ⚠️ **Em migração.** A rede AWS (VPC, subnets, security groups) já está aqui. O cluster ainda não: é a issue [#60](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/60). O provisionamento do cluster `kind` da Fase 2 foi removido — o deploy agora é na AWS.
+O ambiente `dev` está no ar e a aplicação responde pela internet, no endpoint do
+API Gateway. `hom` e `prod` têm a configuração pronta nos inventories, mas ainda
+não foram aplicados.
+
+| Componente | Estado |
+|---|---|
+| Rede, NAT, security groups | ✅ |
+| Cluster EKS 1.33, 2 nodes privados | ✅ |
+| API Gateway com authorizer JWT | ✅ |
+| Balanceador interno + VPC Link | ✅ |
+| ECR e deploy da API | ✅ |
+| Cluster Autoscaler | ✗ os limites existem, o motor não |
+
+> **O cluster cobra sozinho.** O control plane do EKS custa US$ 0,10/hora
+> **enquanto existir** e não é suspenso junto com a sessão do Learner Lab —
+> diferente das instâncias EC2. Com NAT, balanceador e banco, um ambiente de pé
+> custa cerca de **US$ 5/dia**.
+>
+> A variável `criar_cluster`, no inventory de cada ambiente, liga e desliga
+> cluster e NAT juntos.
 
 ## Estrutura
 
 ```text
+bootstrap/                    # bucket de state e tabela de lock; state local
 infra/
 ├── rede.tf                   # VPC, subnets, internet gateway e rotas
-├── security-groups.tf        # SGs de ALB, nodes, banco e Lambda
+├── nat.tf                    # NAT Gateway: a saida das subnets privadas
+├── security-groups.tf        # SGs de ALB, nodes, banco, Lambda e endpoints
+├── vpc-endpoints.tf          # endpoint do Secrets Manager, para a Lambda na VPC
+├── cluster.tf                # EKS, node group e addon do metrics-server
+├── ecr.tf                    # registry das imagens da API
+├── alb.tf                    # balanceador interno e target group dos nodes
+├── api-gateway.tf            # HTTP API, rotas e integracoes
+├── authorizer.tf             # Lambda authorizer que protege /api/v1
+├── secrets.tf                # chave de assinatura do JWT
 ├── data.tf                   # LabRole e zonas de disponibilidade
 ├── variables.tf
 ├── versions.tf
@@ -35,10 +66,17 @@ infra/
     └── prod/terraform.tfvars
 
 k8s/
-├── kustomization.yaml
-├── api/                      # configmap, deployment, service, hpa
-└── postgres/                 # sai daqui quando o banco gerenciado entrar (issue #62)
+├── kustomization.yaml        # fluxo local com kind: API + PostgreSQL no cluster
+├── api/                      # base compartilhada: configmap, deployment, service, hpa
+├── postgres/                 # so o fluxo local usa (issue #65)
+└── nuvem/                    # overlay do EKS: banco no RDS, imagem do ECR
 ```
+
+**Dois overlays, de propósito.** A raiz serve o desenvolvimento local com `kind`
+e um PostgreSQL dentro do cluster. O `nuvem/` monta a API contra o RDS
+gerenciado, com a imagem do ECR e Service `NodePort` — e **não** inclui
+`postgres/`, senão haveria um segundo banco, vazio, e a API conversaria com o
+errado.
 
 ## Tecnologias
 
@@ -51,7 +89,11 @@ k8s/
 
 ## Escalabilidade
 
-O HPA em `k8s/api/hpa.yaml` escala a API entre **2 e 10 réplicas**, com alvo de 70% de CPU e 75% de memória. A revisão desses limiares para o cluster gerenciado é a ADR [#63](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/63).
+O HPA em `k8s/api/hpa.yaml` escala a API entre **2 e 10 réplicas**, com alvo de 70% de CPU e 75% de memória. Ele funciona: o `metrics-server` entra como addon gerenciado do EKS, e sem ele o HPA ficaria em `<unknown>`.
+
+O node group tem `min_size = 2` e `max_size = 4`, mas **nada cria nodes sob pressão**. Um managed node group não escala sozinho — quem faz isso é o Cluster Autoscaler ou o Karpenter, e nenhum dos dois está instalado. Na prática o cluster fica no `desired_size`, e o HPA só escala pods dentro do que já existe.
+
+A revisão dos limiares é a ADR [#63](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/63).
 
 ## Execução
 
@@ -154,9 +196,16 @@ Pipeline em GitHub Actions ([issue #51](https://github.com/tech-challenge-grupo-
 
 | Evento | Ação |
 |---|---|
-| Pull Request | `fmt`, `validate` e `plan` publicado como comentário no PR |
+| Pull Request | `fmt`, `validate` e `plan` nos três ambientes, publicado como comentário |
+| Merge em `develop` | `apply` no ambiente de desenvolvimento |
 | Merge em `homolog` | `apply` no ambiente de homologação |
 | Merge em `main` | `apply` no ambiente de produção |
+| `workflow_dispatch` | `apply` no ambiente escolhido, de qualquer branch |
+
+> A `develop` aplicar o `dev` é deliberado — é o ambiente onde o time trabalha.
+> A consequência é que **aplicar código de branch não mergeada não sobrevive**:
+> o próximo push na `develop` reconcilia o ambiente com o que está lá e desfaz
+> o que não estiver no código. Já derrubou um authorizer no meio do caminho.
 
 Autenticação com as **credenciais temporárias da sessão** do Learner Lab, cadastradas como secrets do repositório — ver [Credenciais da AWS nos pipelines](#credenciais-da-aws-nos-pipelines).
 
@@ -187,22 +236,56 @@ Porta de entrada da aplicacao, em [`infra/api-gateway.tf`](infra/api-gateway.tf)
 |---|---|---|
 | `POST /auth` | Lambda de autenticacao | Sim |
 | `POST /api/v1/auth/login` | API no cluster | Sim |
-| `ANY /api/v1/{proxy+}` | API no cluster | Nao - recebe o authorizer na issue #43 |
+| `ANY /api/v1/{proxy+}` | API no cluster | **Nao** — protegida pelo authorizer |
 | `GET /health/live` | API no cluster | Sim |
 
 A classificacao vem da [matriz de autorizacao](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/MATRIZ_AUTORIZACAO.md). O `/health` e o `/health/ready` **nao** sao roteados: o corpo do `/health` expoe `description` dos checks.
 
-### As rotas do cluster estao desligadas
+### O caminho ate o cluster
 
-Enquanto `alb_listener_arn` estiver vazio, sobem apenas o gateway e a rota `POST /auth`. O VPC Link e as rotas `/api/v1` ficam de fora, porque ainda nao existe cluster ([#60](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/60)) nem ingress ([#64](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/64)) para apontar.
-
-Ao criar o load balancer, preencha a variavel no inventario do ambiente:
-
-```hcl
-alb_listener_arn = "arn:aws:elasticloadbalancing:us-east-1:<conta>:listener/app/..."
+```text
+cliente --HTTPS--> API Gateway --VPC Link--> ALB interno --> nodes:30080 --> pods
+        (cert AWS)                (privado)
 ```
 
-O output `gateway_rotas_do_cluster_ativas` diz se elas estao no ar.
+As rotas `/api/v1` existem quando existe cluster: `local.integrar_cluster`
+acompanha `criar_cluster`, e o balanceador nasce junto, em `alb.tf`. Nao ha mais
+variavel para preencher a mao — o output `gateway_rotas_do_cluster_ativas` diz
+se elas estao no ar.
+
+**O TLS vem do gateway, nao do balanceador.** O `execute-api` ja atende com
+certificado valido da AWS. Um ALB publico exigiria certificado do ACM, que so e
+emitido para dominio cuja posse se prova — ninguem valida `amazonaws.com`. Por
+isso o balanceador e interno: quem fala com ele e so o gateway.
+
+**O gateway repassa o nome do estagio no caminho.** Uma chamada a
+`/dev/health/live` chegaria na API como `/dev/health/live`, que ela nao conhece,
+e devolveria 404. O mapeamento `overwrite:path` com `$request.path` entrega o
+caminho ja sem o estagio, e um unico mapeamento resolve as tres rotas.
+
+### Authorizer
+
+O `ANY /api/v1/{proxy+}` e protegido pelo Lambda authorizer de
+[`infra/authorizer.tf`](infra/authorizer.tf) — formato 2.0, resposta simples,
+cache de 300s.
+
+| Requisicao | Resposta |
+|---|---|
+| Sem header `Authorization` | 401 |
+| Token invalido ou expirado | 403 |
+| Token valido | segue para o cluster |
+
+O 403 e comportamento do HTTP API: header de identidade ausente da 401,
+authorizer que recusa da 403. Forcar 401 exigiria REST API, descartado na
+RFC-0002. Decisao registrada na [#43](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/43).
+
+O motivo de cada recusa vai para o log da funcao, **nunca para a resposta**. E o
+log de acesso do gateway mostra `integrationTime: "-"` nas recusas: o trafego
+nao chega ao backend.
+
+> O cache de 300s significa que um token continua sendo aceito por ate cinco
+> minutos depois de expirar, servido do cache, sem a funcao ser consultada.
+> `authorizer_cache_ttl` permite zerar para depuracao.
 
 ### Throttling e logs
 
