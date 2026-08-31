@@ -131,7 +131,7 @@ jobs:
           # A sessao do Learner Lab expira a cada ~4h. Sem credencial o plan e
           # pulado, para o CI continuar util para fmt e validate nesse intervalo.
           if [ -z "$KEY" ]; then
-            echo "::notice::Sem credenciais da sessao - rode scripts/renova-secrets.sh."
+            echo "::notice::Sem credenciais da sessao - rode scripts/renova-secrets.sh no repositorio principal."
             ok=false
           fi
           echo "exists=$ok" >> "$GITHUB_OUTPUT"
@@ -247,7 +247,7 @@ jobs:
           BUCKET: ${{ vars.TF_STATE_BUCKET }}
         run: |
           if [ -z "$KEY" ]; then
-            echo "::error::Sem credenciais da AWS. Rode scripts/renova-secrets.sh."
+            echo "::error::Sem credenciais da AWS. Rode scripts/renova-secrets.sh no repositorio principal."
             exit 1
           fi
           if [ -z "$BUCKET" ]; then
