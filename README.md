@@ -55,35 +55,62 @@ O HPA em `k8s/api/hpa.yaml` escala a API entre **2 e 10 réplicas**, com alvo de
 
 ## Execução
 
+Para subir ou derrubar o ambiente **inteiro**, os scripts ficam no repositório
+principal — eles orquestram os quatro repositórios, e nenhum dos quatro é dono
+dos demais:
+
+```bash
+bash ../tech-challenge-oficina-mecanica/scripts/sobe-tudo.sh
+```
+
+```bash
+bash ../tech-challenge-oficina-mecanica/scripts/derruba-tudo.sh
+```
+
+O passo a passo e a ordem de dependência estão em
+[docs/CICLO-DE-VIDA.md](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/CICLO-DE-VIDA.md).
+
+> **O cluster cobra sozinho.** O control plane do EKS custa US$ 0,10/hora
+> enquanto existir e **não** é suspenso junto com a sessão do Learner Lab.
+
+Para trabalhar só neste repositório, o Terraform direto:
+
 ```bash
 cd infra
 terraform init
 terraform plan -var-file=inventories/dev/terraform.tfvars
 ```
 
-Aplicar os manifests:
+Manifests do fluxo local com kind:
 
 ```bash
 kubectl apply -k k8s/
+```
+
+Na nuvem o overlay é outro — usa o RDS e a imagem do ECR:
+
+```bash
+kubectl apply -k k8s/nuvem
 ```
 
 ## Credenciais da AWS nos pipelines
 
 O AWS Academy Learner Lab **não permite criar provedor OIDC nem roles IAM**, então os pipelines usam as **credenciais temporárias da sessão**, cadastradas como secrets. Elas expiram junto com a sessão do lab, a cada ~4 horas.
 
-Para renovar em todos os repositórios de uma vez:
+Para renovar em todos os repositórios de uma vez — o script vive no repositório
+principal desde 30/08, junto com os demais que atravessam os quatro:
 
 ```bash
-./scripts/renova-secrets.sh
+bash ../tech-challenge-oficina-mecanica/scripts/renova-secrets.sh
 ```
 
-O script lê o perfil local do `~/.aws/credentials` e publica nos quatro repositórios **sem imprimir os valores em nenhum momento**.
+Ele lê o perfil local do `~/.aws/credentials` e publica nos quatro repositórios **sem imprimir os valores em nenhum momento**.
 
 | Comando | O que faz |
 |---|---|
-| `./scripts/renova-secrets.sh` | Renova nos 4 repositórios |
-| `./scripts/renova-secrets.sh --check` | Mostra só nomes e datas dos secrets |
-| `./scripts/renova-secrets.sh --dry-run` | Mostra o que faria, sem alterar |
+| `renova-secrets.sh` | Renova nos 4 repositórios |
+| `renova-secrets.sh --check` | Mostra só nomes e datas dos secrets |
+| `renova-secrets.sh --dry-run` | Mostra o que faria, sem alterar |
 
 ### Rodando os scripts no Windows
 
@@ -98,10 +125,10 @@ O script lê o perfil local do `~/.aws/credentials` e publica nos quatro reposit
 Chamando o Git Bash explicitamente do PowerShell:
 
 ```powershell
-& "C:\Program Files\Git\bin\bash.exe" ./scripts/renova-secrets.sh --dry-run
+& "C:\Program Files\Git\bin\bash.exe" ../tech-challenge-oficina-mecanica/scripts/renova-secrets.sh --dry-run
 ```
 
-Mais prático: abrir o **Git Bash** direto pelo menu Iniciar. Ali `$HOME` é `C:\Users\<voce>`, e `gh`, `aws`, `terraform` e `kubectl` estão todos no PATH — `./scripts/renova-secrets.sh` funciona sem prefixo.
+Mais prático: abrir o **Git Bash** direto pelo menu Iniciar. Ali `$HOME` é `C:\Users\<voce>`, e `gh`, `aws`, `terraform` e `kubectl` estão todos no PATH — `renova-secrets.sh` funciona sem prefixo.
 
 > Se você já tinha o repositório clonado antes do `.gitattributes`, force a renormalização uma vez:
 >
