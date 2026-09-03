@@ -148,3 +148,46 @@ resource "aws_vpc_security_group_ingress_rule" "banco_dos_nodes_eks" {
   to_port                      = 5432
   ip_protocol                  = "tcp"
 }
+
+# ------------------------------------------------ descoberta do autoscaler
+#
+# O Cluster Autoscaler nao recebe a lista de node groups por parametro: ele
+# varre os Auto Scaling groups da regiao e fica com os que carregam estas duas
+# tags. E o modo `--node-group-auto-discovery=asg:tag=...`, que o manifest em
+# k8s/cluster-autoscaler usa.
+#
+# As tags vao no ASG, nao no node group. Sao coisas diferentes: o `tags` do
+# aws_eks_node_group marca o recurso do EKS, e o autoscaler nunca olha para ele
+# - ele fala com a API do Auto Scaling. Por isso o aws_autoscaling_group_tag,
+# que alcanca o ASG que o EKS criou por baixo.
+#
+# A segunda tag traz o nome do cluster de proposito. Os tres ambientes vivem na
+# MESMA conta do Learner Lab: com apenas a tag `enabled`, o autoscaler de `dev`
+# descobriria tambem os ASGs de `hom` e `prod` e escalaria os nodes deles.
+#
+# propagate_at_launch = false porque isto descreve o grupo, nao as instancias.
+# Propagar so encheria cada EC2 de tag sem uso.
+
+resource "aws_autoscaling_group_tag" "autoscaler_habilitado" {
+  count = var.criar_cluster ? 1 : 0
+
+  autoscaling_group_name = aws_eks_node_group.principal[0].resources[0].autoscaling_groups[0].name
+
+  tag {
+    key                 = "k8s.io/cluster-autoscaler/enabled"
+    value               = "true"
+    propagate_at_launch = false
+  }
+}
+
+resource "aws_autoscaling_group_tag" "autoscaler_cluster" {
+  count = var.criar_cluster ? 1 : 0
+
+  autoscaling_group_name = aws_eks_node_group.principal[0].resources[0].autoscaling_groups[0].name
+
+  tag {
+    key                 = "k8s.io/cluster-autoscaler/${local.nome}"
+    value               = "owned"
+    propagate_at_launch = false
+  }
+}

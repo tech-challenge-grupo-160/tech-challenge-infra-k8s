@@ -1,0 +1,17 @@
+# Fica fora do overlay k8s/nuvem de proposito.
+#
+# Aquele overlay carrega `namespace: oficina-mecanica`, e o kustomize aplica
+# isso a TODO recurso que passa por ele - o autoscaler iria parar no namespace
+# da aplicacao. Ele nao e parte da API: e componente do cluster, e mora em
+# kube-system junto de CoreDNS e metrics-server.
+#
+# Tambem tem ciclo de vida proprio. A aplicacao e reimplantada a cada commit; o
+# autoscaler so muda quando o cluster muda de versao.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: kube-system
+
+resources:
+  - rbac.yaml
+  - deployment.yaml

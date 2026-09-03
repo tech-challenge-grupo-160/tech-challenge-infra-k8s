@@ -131,3 +131,8 @@ output "nat_ip_publico" {
   description = "IP fixo de saida das subnets privadas. Util para liberar em firewall de terceiros."
   value       = one(aws_eip.nat[*].public_ip)
 }
+
+output "node_group_asg" {
+  description = "Nome do Auto Scaling group dos nodes. E nele que o Cluster Autoscaler mexe - util para conferir a capacidade com `aws autoscaling describe-auto-scaling-groups`."
+  value       = one(aws_eks_node_group.principal[*].resources[0].autoscaling_groups[0].name)
+}

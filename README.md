@@ -31,7 +31,7 @@ não foram aplicados.
 | API Gateway com authorizer JWT | ✅ |
 | Balanceador interno + VPC Link | ✅ |
 | ECR e deploy da API | ✅ |
-| Cluster Autoscaler | ✗ os limites existem, o motor não |
+| Cluster Autoscaler | ✅ manifest em `k8s/cluster-autoscaler`, descoberta por tag no ASG |
 
 > **O cluster cobra sozinho.** O control plane do EKS custa US$ 0,10/hora
 > **enquanto existir** e não é suspenso junto com a sessão do Learner Lab —
@@ -50,7 +50,7 @@ infra/
 ├── nat.tf                    # NAT Gateway: a saida das subnets privadas
 ├── security-groups.tf        # SGs de ALB, nodes, banco, Lambda e endpoints
 ├── vpc-endpoints.tf          # endpoint do Secrets Manager, para a Lambda na VPC
-├── cluster.tf                # EKS, node group e addon do metrics-server
+├── cluster.tf                # EKS, node group, metrics-server e tags do autoscaler
 ├── ecr.tf                    # registry das imagens da API
 ├── alb.tf                    # balanceador interno e target group dos nodes
 ├── api-gateway.tf            # HTTP API, rotas e integracoes
@@ -69,7 +69,8 @@ k8s/
 ├── kustomization.yaml        # fluxo local com kind: API + PostgreSQL no cluster
 ├── api/                      # base compartilhada: configmap, deployment, service, hpa
 ├── postgres/                 # so o fluxo local usa (issue #65)
-└── nuvem/                    # overlay do EKS: banco no RDS, imagem do ECR
+├── nuvem/                    # overlay do EKS: banco no RDS, imagem do ECR
+└── cluster-autoscaler/       # componente do cluster, aplicado em kube-system
 ```
 
 **Dois overlays, de propósito.** A raiz serve o desenvolvimento local com `kind`
@@ -91,7 +92,13 @@ errado.
 
 O HPA em `k8s/api/hpa.yaml` escala a API entre **2 e 10 réplicas**, com alvo de 70% de CPU e 75% de memória. Ele funciona: o `metrics-server` entra como addon gerenciado do EKS, e sem ele o HPA ficaria em `<unknown>`.
 
-O node group tem `min_size = 2` e `max_size = 4`, mas **nada cria nodes sob pressão**. Um managed node group não escala sozinho — quem faz isso é o Cluster Autoscaler ou o Karpenter, e nenhum dos dois está instalado. Na prática o cluster fica no `desired_size`, e o HPA só escala pods dentro do que já existe.
+O node group tem `min_size = 2` e `max_size = 4`. Quem se move dentro desses limites é o **Cluster Autoscaler**, em `k8s/cluster-autoscaler` — um managed node group não escala sozinho, os limites apenas dizem até onde alguém *pode* ir.
+
+Os dois trabalham em camadas diferentes, e a distinção importa: o HPA cria **pod**; quando não há node com espaço, o pod novo fica `Pending` para sempre. O autoscaler vê esse `Pending` e cria **node** — leva cerca de 2 minutos até ficar `Ready`. Na volta, remove o node que passou 5 minutos ocioso e cujos pods cabem em outro lugar.
+
+A descoberta é por tag no Auto Scaling group, não por parâmetro: `infra/cluster.tf` marca o ASG com `k8s.io/cluster-autoscaler/enabled` e `k8s.io/cluster-autoscaler/<cluster>`. A segunda tag traz o nome do cluster porque os três ambientes dividem a mesma conta do Learner Lab — sem ela, o autoscaler de `dev` escalaria os nodes de `hom` e `prod` também.
+
+Na AWS ele se autentica pela role da instância do node, a `LabRole`. O correto seria IRSA, com uma role só para o ServiceAccount, mas o Learner Lab não permite criar roles.
 
 A revisão dos limiares é a ADR [#63](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/63).
 

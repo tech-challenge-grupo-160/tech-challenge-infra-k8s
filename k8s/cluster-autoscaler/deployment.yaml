@@ -1,0 +1,103 @@
+# Cluster Autoscaler (issue #60 / F3-26).
+#
+# O HPA escala POD; quando nao ha node com espaco, o pod novo fica Pending para
+# sempre. Quem cria node e este autoscaler. Um managed node group com min_size e
+# max_size nao escala sozinho: os limites so dizem ate onde alguem PODE ir.
+#
+# Como ele decide:
+#
+#   - subir: viu pod Pending que nao cabe em node nenhum -> aumenta o desired
+#     do ASG. Node novo leva ~2 min para ficar Ready;
+#   - descer: um node ficou 5 min abaixo do limiar de uso E todos os seus pods
+#     cabem em outro lugar -> drena e remove.
+#
+# Por isso o cluster.tf tem `ignore_changes = [scaling_config[0].desired_size]`:
+# sem aquilo, o proximo `terraform apply` devolveria a contagem ao valor da
+# variavel e desfaria o que este pod fez.
+#
+# __CLUSTER__ e __REGIAO__ sao substituidos no momento do deploy - pelo workflow
+# Deploy EKS e pelo scripts/sobe-tudo.sh, ambos no repositorio principal. O
+# nome do cluster nao pode ficar fixo aqui: o mesmo manifest serve dev, hom e
+# prod.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cluster-autoscaler
+  namespace: kube-system
+  labels:
+    app: cluster-autoscaler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cluster-autoscaler
+  template:
+    metadata:
+      labels:
+        app: cluster-autoscaler
+      annotations:
+        # Sem isto o autoscaler poderia drenar o proprio node e se matar no meio
+        # de uma decisao de scale down.
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+    spec:
+      # Garante que ele nao seja o primeiro a ser despejado quando o node aperta.
+      priorityClassName: system-cluster-critical
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: cluster-autoscaler
+      containers:
+        - name: cluster-autoscaler
+          # A minor casa com a do cluster (var.cluster_version = 1.33). O projeto
+          # versiona por minor: rodar 1.32 contra um cluster 1.33 e cenario nao
+          # suportado pelo upstream.
+          image: registry.k8s.io/autoscaling/cluster-autoscaler:v1.33.0
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: 100m
+              memory: 600Mi
+            limits:
+              cpu: 100m
+              memory: 600Mi
+          command:
+            - ./cluster-autoscaler
+            - --v=4
+            - --stderrthreshold=info
+            - --cloud-provider=aws
+            # Descoberta pelas tags que o infra/cluster.tf poe no ASG. A segunda
+            # tag traz o nome do cluster porque os tres ambientes dividem a mesma
+            # conta - ver o comentario la.
+            - --node-group-auto-discovery=asg:tag=k8s.io/cluster-autoscaler/enabled,k8s.io/cluster-autoscaler/__CLUSTER__
+            # Sem isto o autoscaler se recusa a remover qualquer node que tenha
+            # pod de kube-system sem controlador - e todo node aqui tem. Com dois
+            # nodes so, o scale down nunca aconteceria.
+            - --skip-nodes-with-system-pods=false
+            # Os nodes usam apenas o disco efemero; nao ha volume local com dado
+            # que se perca ao drenar.
+            - --skip-nodes-with-local-storage=false
+            # Entre dois node groups que resolvem o mesmo pod, fica com o que
+            # deixa menos recurso ocioso.
+            - --expander=least-waste
+            - --balance-similar-node-groups
+            # Janelas curtas de proposito: numa demonstracao de ate 15 minutos, o
+            # padrao de 10 min para o scale down nao caberia na gravacao.
+            - --scale-down-unneeded-time=5m
+            - --scale-down-delay-after-add=5m
+          env:
+            # O SDK da AWS dentro do pod nao herda regiao de lugar nenhum.
+            - name: AWS_REGION
+              value: __REGIAO__
+          volumeMounts:
+            - name: ssl-certs
+              mountPath: /etc/ssl/certs/ca-certificates.crt
+              readOnly: true
+      volumes:
+        # A imagem e distroless e nao traz cadeia de certificados. Sem montar a
+        # do node, toda chamada HTTPS a API da AWS falha com erro de TLS.
+        - name: ssl-certs
+          hostPath:
+            path: /etc/ssl/certs/ca-bundle.crt
