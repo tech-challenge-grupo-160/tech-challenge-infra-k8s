@@ -94,7 +94,18 @@ O HPA em `k8s/api/hpa.yaml` escala a API entre **2 e 10 réplicas**, com alvo de
 
 O node group tem `min_size = 2` e `max_size = 4`. Quem se move dentro desses limites é o **Cluster Autoscaler**, em `k8s/cluster-autoscaler` — um managed node group não escala sozinho, os limites apenas dizem até onde alguém *pode* ir.
 
-Os dois trabalham em camadas diferentes, e a distinção importa: o HPA cria **pod**; quando não há node com espaço, o pod novo fica `Pending` para sempre. O autoscaler vê esse `Pending` e cria **node** — leva cerca de 2 minutos até ficar `Ready`. Na volta, remove o node que passou 5 minutos ocioso e cujos pods cabem em outro lugar.
+Os dois trabalham em camadas diferentes, e a distinção importa: o HPA cria **pod**; quando não há node com espaço, o pod novo fica `Pending` para sempre. O autoscaler vê esse `Pending` e cria **node**. Na volta, remove o node que passou 5 minutos ocioso e cujos pods cabem em outro lugar.
+
+Medido em `dev` em 04/09, forçando 6 pods de 900m contra dois `t3.medium`:
+
+```
+18:55:54  Estimated 2 nodes needed
+18:55:54  Final scale-up plan: [2->4 (max: 4)]
+18:56:35  node registrado e Ready
+18:56:04  pod didn't trigger scale-up: 1 max node group size reached
+```
+
+**45 segundos** da decisão ao node pronto. Os dois pods que sobraram continuaram `Pending` de propósito: o `max_size` é 4, e o autoscaler para no teto em vez de estourar o limite — é o comportamento correto, e é o que impede uma carga anômala de consumir o crédito da conta.
 
 A descoberta é por tag no Auto Scaling group, não por parâmetro: `infra/cluster.tf` marca o ASG com `k8s.io/cluster-autoscaler/enabled` e `k8s.io/cluster-autoscaler/<cluster>`. A segunda tag traz o nome do cluster porque os três ambientes dividem a mesma conta do Learner Lab — sem ela, o autoscaler de `dev` escalaria os nodes de `hom` e `prod` também.
 

@@ -7,7 +7,7 @@
 # Como ele decide:
 #
 #   - subir: viu pod Pending que nao cabe em node nenhum -> aumenta o desired
-#     do ASG. Node novo leva ~2 min para ficar Ready;
+#     do ASG. Medido em dev, com t3.medium: 45s da decisao ao node Ready;
 #   - descer: um node ficou 5 min abaixo do limiar de uso E todos os seus pods
 #     cabem em outro lugar -> drena e remove.
 #
@@ -40,6 +40,31 @@ spec:
         # de uma decisao de scale down.
         cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
     spec:
+      # A rede do node, e nao a rede de pods. Sem isto o autoscaler nao consegue
+      # credencial da AWS e morre no primeiro ciclo:
+      #
+      #   NoCredentialProviders: no valid providers in chain
+      #   F ... Failed to create AWS Manager
+      #
+      # O motivo e o IMDS. As instancias do node group sobem com
+      # HttpPutResponseHopLimit = 1 - conferido em 04/09 nos dois nodes de dev -,
+      # e um pod na rede de pods gasta um hop a mais para chegar la, entao a
+      # requisicao e descartada sem resposta. Na rede do node o processo usa a
+      # pilha do host direto, cabe em um hop, e o SDK acha a role da instancia.
+      #
+      # As duas alternativas foram consideradas e descartadas:
+      #
+      #   - IRSA, uma role so para este ServiceAccount, seria o certo. O Learner
+      #     Lab nao permite criar roles;
+      #   - launch template no node group com hop limit 2 e o caminho
+      #     estrutural, e de quebra resolveria o problema de security group que
+      #     o cluster.tf documenta. Fica registrado como divida; nao foi feito
+      #     agora porque troca os nodes e o cluster.tf ja explica o risco.
+      #
+      # Nao ha porta em conflito: o autoscaler so escuta metricas em 8085, e
+      # nada mais no node usa essa porta.
+      hostNetwork: true
+
       # Garante que ele nao seja o primeiro a ser despejado quando o node aperta.
       priorityClassName: system-cluster-critical
       securityContext:
