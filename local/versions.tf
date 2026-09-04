@@ -1,0 +1,17 @@
+terraform {
+  required_version = ">= 1.6.0"
+
+  backend "local" {}
+
+  required_providers {
+    kind = {
+      source  = "tehcyx/kind"
+      version = "~> 0.6"
+    }
+
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 2.30"
+    }
+  }
+}
