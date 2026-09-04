@@ -42,6 +42,54 @@ terraform destroy
 
 Não há custo em deixar de pé além da memória da sua máquina — mas o cluster continua consumindo RAM do Docker Desktop depois que você esquece dele.
 
+## Problemas comuns
+
+O state é local — fica em `local/terraform.tfstate`, fora do Git. Os dois erros
+abaixo são as duas metades do mesmo problema: state e cluster saírem de sincronia
+porque um dos dois foi mexido por fora.
+
+### `node(s) already exist for a cluster with the name "oficina-mecanica"`
+
+O cluster existe, o Terraform não sabe. Apague os dois e comece de novo:
+
+```bash
+kind delete cluster --name oficina-mecanica && rm -f terraform.tfstate terraform.tfstate.backup && terraform init -reconfigure && terraform apply
+```
+
+### `could not locate any control plane nodes for cluster named 'oficina-mecanica'`
+
+O inverso: o state existe, o cluster não. Só o state precisa sair:
+
+```bash
+rm -f terraform.tfstate terraform.tfstate.backup && terraform init -reconfigure && terraform apply
+```
+
+### HPA em `<unknown>`
+
+O metrics-server leva alguns minutos para expor métricas depois que o cluster
+sobe. Antes de investigar, confirme que ele já responde:
+
+```bash
+kubectl top nodes && kubectl get hpa -n oficina-mecanica
+```
+
+Se `kubectl top` também não responder depois de alguns minutos, o problema é o
+metrics-server, não o HPA — aqui ele é instalado por um `local-exec` com
+`--kubelet-insecure-tls`, necessário porque os certificados do kubelet no kind
+não são assinados por uma CA que ele reconheça.
+
+## Validações antes de abrir PR
+
+```bash
+terraform fmt -check -recursive && terraform init -backend=false && terraform validate
+```
+
+Render dos manifests, sem aplicar nada:
+
+```bash
+kubectl kustomize ../k8s
+```
+
 ## Uma inconsistência proposital com o `infra/`
 
 Aqui o namespace é criado **por Terraform**, com `kubernetes_namespace`. Na nuvem ele nasce de um manifest, e a [#60](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/60) registra por quê: configurar um provider a partir de um recurso da mesma configuração é antipattern do Terraform — o endpoint do cluster é *unknown* no primeiro apply, e quebra na criação e no destroy.
