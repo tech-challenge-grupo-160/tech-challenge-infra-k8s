@@ -65,10 +65,12 @@ infra/
     ├── hom/terraform.tfvars
     └── prod/terraform.tfvars
 
+local/                        # cluster kind na maquina: SO desenvolvimento, nenhum pipeline usa
+
 k8s/
 ├── kustomization.yaml        # fluxo local com kind: API + PostgreSQL no cluster
 ├── api/                      # base compartilhada: configmap, deployment, service, hpa
-├── postgres/                 # so o fluxo local usa (issue #65)
+├── postgres/                 # so o fluxo local com kind usa; na nuvem o banco e o RDS
 ├── nuvem/                    # overlay do EKS: banco no RDS, imagem do ECR
 └── cluster-autoscaler/       # componente do cluster, aplicado em kube-system
 ```
@@ -141,11 +143,20 @@ terraform init
 terraform plan -var-file=inventories/dev/terraform.tfvars
 ```
 
-Manifests do fluxo local com kind:
+Ambiente local com kind — **so desenvolvimento**, nenhum pipeline usa. O cluster sai do
+`local/`, e os manifests do kustomization da raiz de `k8s/`, que inclui o PostgreSQL
+dentro do cluster:
+
+```bash
+cd local && terraform init && terraform apply
+```
 
 ```bash
 kubectl apply -k k8s/
 ```
+
+Detalhes e limitacoes em [local/README.md](local/README.md). Para so rodar a API, o
+`docker-compose.yml` do repositorio principal e mais rapido.
 
 Na nuvem o overlay é outro — usa o RDS e a imagem do ECR:
 
