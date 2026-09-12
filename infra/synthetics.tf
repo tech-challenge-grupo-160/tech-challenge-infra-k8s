@@ -56,12 +56,7 @@ resource "datadog_synthetics_test" "lambda_uptime" {
   request_definition {
     method = "POST"
     url    = "${aws_apigatewayv2_api.principal.api_endpoint}/${var.ambiente}/auth"
-    body   = "{}"
-
-    request_headers = {
-      Content-Type = "application/json"
-    }
-  }
+    body   = "{}"`n}
 
   # Payload vazio e controlado valida disponibilidade sem expor credenciais.
   assertion {
@@ -99,7 +94,6 @@ resource "datadog_dashboard_json" "uptime" {
           title      = "Status historico da API"
           alert_id   = tostring(datadog_synthetics_test.api_uptime[0].monitor_id)
           viz_type   = "timeseries"
-          time       = "1h"
           live_span  = "1h"
         }
       },
@@ -109,7 +103,6 @@ resource "datadog_dashboard_json" "uptime" {
           title      = "Status historico da Lambda"
           alert_id   = tostring(datadog_synthetics_test.lambda_uptime[0].monitor_id)
           viz_type   = "timeseries"
-          time       = "1h"
           live_span  = "1h"
         }
       },
