@@ -28,14 +28,26 @@ spec:
                 secretKeyRef:
                   name: api-secret
                   key: Jwt__SecretKey
-          # O /health do ASP.NET consulta o banco. Na nuvem o RDS pode levar
+            - name: DD_AGENT_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: DD_ENV
+              value: dev
+          # Readiness consulta o banco. Na nuvem o RDS pode levar
           # alguns segundos a mais para aceitar a primeira conexao, e a migration
           # roda no startup - por isso a folga maior que a do kind.
           readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
             initialDelaySeconds: 30
             periodSeconds: 10
             failureThreshold: 6
           livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
             initialDelaySeconds: 90
             periodSeconds: 20
             failureThreshold: 3
