@@ -111,7 +111,9 @@ Medido em `dev` em 04/09, forçando 6 pods de 900m contra dois `t3.medium`:
 
 A descoberta é por tag no Auto Scaling group, não por parâmetro: `infra/cluster.tf` marca o ASG com `k8s.io/cluster-autoscaler/enabled` e `k8s.io/cluster-autoscaler/<cluster>`. A segunda tag traz o nome do cluster porque os três ambientes dividem a mesma conta do Learner Lab — sem ela, o autoscaler de `dev` escalaria os nodes de `hom` e `prod` também.
 
-Na AWS ele se autentica pela role da instância do node, a `LabRole`. O correto seria IRSA, com uma role só para o ServiceAccount, mas o Learner Lab não permite criar roles.
+Na AWS, o node group usa uma role de instancia criada pelo Terraform com as
+policies oficiais do EKS. O correto para componentes como o autoscaler seria
+IRSA, com uma role so para o ServiceAccount.
 
 A revisão dos limiares é a ADR [#63](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/63).
 
@@ -143,13 +145,16 @@ terraform init
 terraform plan -var-file=inventories/dev/terraform.tfvars
 ```
 
-Ambiente local com kind — **so desenvolvimento**, nenhum pipeline usa. O cluster sai do
-`local/`, e os manifests do kustomization da raiz de `k8s/`, que inclui o PostgreSQL
-dentro do cluster:
+Em uma conta AWS nova, o primeiro apply pode ser feito sem as Lambdas da
+aplicacao. Depois que `tc-grupo160-auth-dev` e
+`tc-grupo160-authorizer-dev` forem publicadas, aplique novamente habilitando
+as permissoes do API Gateway:
 
 ```bash
-cd local && terraform init && terraform apply
+terraform apply -var-file=inventories/dev/terraform.tfvars -var='lambdas_publicadas=true'
 ```
+
+Manifests do fluxo local com kind:
 
 ```bash
 kubectl apply -k k8s/
@@ -162,6 +167,34 @@ Na nuvem o overlay é outro — usa o RDS e a imagem do ECR:
 
 ```bash
 kubectl apply -k k8s/nuvem
+```
+
+### Datadog no EKS
+
+Quando `datadog_enabled = true` no inventory, o Terraform instala o Datadog
+Agent pelo chart oficial do Helm, como um DaemonSet no EKS. Ele coleta métricas,
+logs dos containers e recebe traces APM; não é necessário colocar o Agent dentro
+do container da API. O mesmo apply cria um segredo no Secrets Manager, e o
+script instrumenta as duas Lambdas com a extensão e a camada .NET oficiais.
+
+A chave deve ser preenchida localmente no inventory do ambiente antes de aplicar:
+
+```bash
+# infra/inventories/dev/terraform.tfvars
+datadog_enabled = true
+datadog_api_key  = "CHAVE_NOVA_DO_DATADOG"
+```
+
+No `dev`, o inventory já deixa `datadog_enabled = true`. Para ambientes sem
+Datadog, mantenha a variável como `false`. O Terraform usa o provider Helm e a
+AWS CLI para autenticar no cluster; o `npx` é usado para executar o
+`datadog-ci` que instrumenta as Lambdas.
+
+Para conferir a instalação:
+
+```bash
+kubectl get pods -n datadog
+kubectl get daemonset -n datadog
 ```
 
 ## Credenciais da AWS nos pipelines

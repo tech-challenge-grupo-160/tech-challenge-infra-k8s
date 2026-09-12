@@ -1,5 +1,5 @@
 variable "region" {
-  description = "Regiao AWS. O AWS Academy Learner Lab so permite us-east-1."
+  description = "Regiao AWS onde os recursos serao provisionados."
   type        = string
   default     = "us-east-1"
 }
@@ -61,6 +61,24 @@ variable "criar_cluster" {
   EOT
   type        = bool
   default     = false
+}
+
+variable "datadog_enabled" {
+  description = "Instala o Datadog Agent no EKS por Helm."
+  type        = bool
+  default     = false
+}
+
+variable "datadog_api_key" {
+  description = "Chave da API Datadog. Informada pelo inventory local; nunca versionar o valor real."
+  type        = string
+  sensitive   = true
+  default     = ""
+
+  validation {
+    condition     = !var.datadog_enabled || trimspace(var.datadog_api_key) != ""
+    error_message = "datadog_api_key precisa ser informada quando datadog_enabled=true."
+  }
 }
 
 variable "cluster_version" {
@@ -130,7 +148,7 @@ variable "lambdas_publicadas" {
     sem as aplicacoes, quando nao ha funcao para permitir.
   EOT
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "lambda_authorizer_nome" {

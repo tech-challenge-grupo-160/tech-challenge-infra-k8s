@@ -101,8 +101,8 @@ resource "aws_security_group" "lambda" {
 
 resource "aws_vpc_security_group_egress_rule" "lambda_saida" {
   security_group_id = aws_security_group.lambda.id
-  description       = "Saida para o banco"
-  cidr_ipv4         = var.vpc_cidr
+  description       = "Saida para o banco e APIs externas via NAT"
+  cidr_ipv4         = "0.0.0.0/0"
   ip_protocol       = "-1"
 }
 

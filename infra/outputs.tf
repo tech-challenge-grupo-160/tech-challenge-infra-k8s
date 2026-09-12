@@ -33,9 +33,14 @@ output "sg_lambda" {
   value       = aws_security_group.lambda.id
 }
 
-output "lab_role_arn" {
-  description = "ARN da LabRole, unica role utilizavel no Learner Lab."
-  value       = data.aws_iam_role.lab.arn
+output "eks_cluster_role_arn" {
+  description = "ARN da role usada pelo control plane do EKS."
+  value       = "arn:aws:iam::${data.aws_caller_identity.atual.account_id}:role/LabRole"
+}
+
+output "eks_node_role_arn" {
+  description = "ARN da role usada pelos nodes do EKS."
+  value       = "arn:aws:iam::${data.aws_caller_identity.atual.account_id}:role/LabRole"
 }
 
 output "azs" {
@@ -76,6 +81,12 @@ output "sg_endpoints" {
 output "endpoint_secrets_manager" {
   description = "Id do endpoint de interface do Secrets Manager. A Lambda na VPC depende dele para ler segredos."
   value       = aws_vpc_endpoint.secrets_manager.id
+}
+
+output "datadog_api_key_secret_arn" {
+  description = "ARN do segredo da API key do Datadog, usado para instrumentar as Lambdas."
+  value       = one(aws_secretsmanager_secret.datadog_api_key[*].arn)
+  sensitive   = true
 }
 
 # ------------------------------------------------------------------ cluster
