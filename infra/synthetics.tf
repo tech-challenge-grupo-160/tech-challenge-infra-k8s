@@ -56,7 +56,8 @@ resource "datadog_synthetics_test" "lambda_uptime" {
   request_definition {
     method = "POST"
     url    = "${aws_apigatewayv2_api.principal.api_endpoint}/${var.ambiente}/auth"
-    body   = "{}"`r`n  }
+    body   = "{}"
+  }
 
   # Payload vazio e controlado valida disponibilidade sem expor credenciais.
   assertion {
