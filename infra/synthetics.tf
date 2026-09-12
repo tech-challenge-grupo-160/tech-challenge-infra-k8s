@@ -84,27 +84,27 @@ resource "datadog_dashboard_json" "uptime" {
   count = var.datadog_synthetics_enabled ? 1 : 0
 
   dashboard = jsonencode({
-    title       = "${var.project} - Uptime - ${var.ambiente}"
-    description = "Historico dos monitores sinteticos da API e da Lambda."
-    layout_type = "ordered"
+    title        = "${var.project} - Uptime - ${var.ambiente}"
+    description  = "Historico dos monitores sinteticos da API e da Lambda."
+    layout_type  = "ordered"
     is_read_only = false
     widgets = [
       {
         definition = {
-          type       = "alert_graph"
-          title      = "Status historico da API"
-          alert_id   = tostring(datadog_synthetics_test.api_uptime[0].monitor_id)
-          viz_type   = "timeseries"
-          live_span  = "1h"
+          type      = "alert_graph"
+          title     = "Status historico da API"
+          alert_id  = tostring(datadog_synthetics_test.api_uptime[0].monitor_id)
+          viz_type  = "timeseries"
+          live_span = "1h"
         }
       },
       {
         definition = {
-          type       = "alert_graph"
-          title      = "Status historico da Lambda"
-          alert_id   = tostring(datadog_synthetics_test.lambda_uptime[0].monitor_id)
-          viz_type   = "timeseries"
-          live_span  = "1h"
+          type      = "alert_graph"
+          title     = "Status historico da Lambda"
+          alert_id  = tostring(datadog_synthetics_test.lambda_uptime[0].monitor_id)
+          viz_type  = "timeseries"
+          live_span = "1h"
         }
       },
       {
@@ -113,9 +113,9 @@ resource "datadog_dashboard_json" "uptime" {
           title = "Latencia dos testes sinteticos"
           requests = [
             {
-              q             = "avg:synthetics.http.response.time{service:${var.project},env:${var.ambiente}} by {component}"
-              display_type  = "line"
-              style         = { line_type = "solid", line_width = "normal" }
+              q            = "avg:synthetics.http.response.time{service:${var.project},env:${var.ambiente}} by {component}"
+              display_type = "line"
+              style        = { line_type = "solid", line_width = "normal" }
             }
           ]
         }
