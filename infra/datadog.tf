@@ -45,7 +45,9 @@ resource "helm_release" "datadog_agent" {
   set {
     name  = "datadog.logs.enabled"
     value = "true"
-  }  set {
+  }
+
+  set {
     name  = "datadog.dogstatsd.port"
     value = "8125"
   }
