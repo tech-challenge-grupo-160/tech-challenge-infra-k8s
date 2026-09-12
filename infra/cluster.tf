@@ -5,19 +5,18 @@
 # registra a disciplina: "Cluster criado tarde, proximo a gravacao do video, e
 # destruido logo depois."
 #
-# O control plane cobra US$ 0,10/hora ENQUANTO EXISTIR, e nao e suspenso junto
-# com a sessao do Learner Lab - diferente das instancias EC2. Somado ao NAT dao
-# ~US$ 3,50/dia contra um orcamento de US$ 100. Ligar e uma decisao consciente;
-# por isso a variavel nao vem ligada em nenhum inventory.
+# O control plane cobra por hora ENQUANTO EXISTIR. Somado ao NAT, o custo pode
+# ser relevante. Ligar e uma decisao consciente; por isso a variavel nao vem
+# ligada em nenhum inventory.
 #
-# A LabRole e usada como role do cluster E dos nodes. Nao e desenho, e limitacao:
-# o Learner Lab nao permite criar roles. Ver RFC-0001 e issue #59.
+# O Learner Lab nao permite criar roles IAM. A LabRole preexistente e usada tanto
+# pelo control plane quanto pelos nodes.
 
 resource "aws_eks_cluster" "principal" {
   count = var.criar_cluster ? 1 : 0
 
   name     = local.nome
-  role_arn = data.aws_iam_role.lab.arn
+  role_arn = "arn:aws:iam::${data.aws_caller_identity.atual.account_id}:role/LabRole"
   version  = var.cluster_version
 
   vpc_config {
@@ -39,18 +38,7 @@ resource "aws_eks_cluster" "principal" {
     # depreciado, e os access entries abaixo dependem do modo API.
     authentication_mode = "API_AND_CONFIG_MAP"
 
-    # Quem aplica o Terraform vira admin do cluster automaticamente, por um
-    # access entry que o proprio EKS cria. Ele e gravado com o ARN da IAM role
-    # por tras da sessao - `arn:aws:iam::<conta>:role/voclabs` -, nao com o ARN
-    # da sessao. Como todas as sessoes do lab, inclusive as das pipelines,
-    # assumem essa mesma role, um unico entry cobre todo mundo.
-    #
-    # Nao ha access entry explicito aqui de proposito: ele colidiria com o que o
-    # bootstrap cria para o mesmo principal, e o apply falharia com
-    # ResourceInUseException. Se um dia for preciso liberar outro principal,
-    # monte o ARN com data.aws_caller_identity.atual.account_id - o lab nega
-    # iam:GetRole ate sobre a propria voclabs, entao `data aws_iam_role` nao
-    # serve. E o mesmo motivo que fez o api-gateway.tf montar o ARN da Lambda.
+    # Quem aplica o Terraform vira admin do cluster automaticamente.
     bootstrap_cluster_creator_admin_permissions = true
   }
 
@@ -64,7 +52,7 @@ resource "aws_eks_node_group" "principal" {
 
   cluster_name    = aws_eks_cluster.principal[0].name
   node_group_name = "${local.nome}-nodes"
-  node_role_arn   = data.aws_iam_role.lab.arn
+  node_role_arn   = "arn:aws:iam::${data.aws_caller_identity.atual.account_id}:role/LabRole"
   version         = var.cluster_version
 
   # Subnets privadas, como pede o criterio de aceite da #60. Alcancam a internet

@@ -12,3 +12,8 @@ quantidade_azs = 2
 # NAO e suspenso com a sessao do lab, mais o NAT. Volte para false ao terminar -
 # a RFC-0001 pede o cluster destruido ao fim de cada sessao de trabalho.
 criar_cluster = true
+
+# O Agent e instalado no EKS pelo Terraform. A chave entra por
+# TF_VAR_datadog_api_key e nunca deve ser versionada neste arquivo.
+datadog_enabled = true
+datadog_api_key  = "chave_secreta_data_dog"

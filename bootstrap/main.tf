@@ -13,6 +13,7 @@ resource "aws_s3_bucket" "tfstate" {
   # A conta do Learner Lab e reciclada entre turmas. force_destroy evita
   # que a limpeza final trave por causa de versoes antigas de state.
   force_destroy = true
+  object_lock_enabled = false
 }
 
 resource "aws_s3_bucket_versioning" "tfstate" {

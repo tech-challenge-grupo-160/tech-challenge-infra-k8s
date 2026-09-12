@@ -36,16 +36,10 @@ resource "aws_secretsmanager_secret_version" "jwt_signing_key" {
 
 # ---------------------------------------------------------------- privilegio
 #
-# O criterio de menor privilegio da issue #46 nao e atendivel neste ambiente.
-# A policy correta seria uma role por consumidor, com secretsmanager:GetSecretValue
-# restrito a este ARN. O Learner Lab bloqueia iam:CreateRole e iam:CreatePolicy,
-# e a LabRole - unica utilizavel - ja tem acesso amplo.
-#
-# Verificado em 2026-08-26 com a sessao ativa: create, get e delete de secret
-# funcionam com a LabRole sem policy adicional.
-#
-# A limitacao esta registrada na RFC-0001 e vale igualmente aqui. O desenho
-# correto fica documentado para constar na entrega:
+# O criterio de menor privilegio da issue #46 exige uma role por consumidor,
+# com secretsmanager:GetSecretValue restrito a este ARN. A role da Lambda e
+# publicada pelo repositorio da aplicacao; este modulo apenas cria o segredo.
+# O desenho correto fica documentado para constar na entrega:
 #
 #   data "aws_iam_policy_document" "leitura_jwt" {
 #     statement {

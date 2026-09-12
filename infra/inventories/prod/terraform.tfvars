@@ -13,3 +13,6 @@ quantidade_azs = 2
 # control plane, que NAO e suspenso com a sessao do lab, mais o NAT. Voltar para
 # false destroi cluster e NAT juntos.
 criar_cluster = true
+
+datadog_enabled = true
+datadog_api_key  = ""
