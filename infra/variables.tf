@@ -209,3 +209,33 @@ variable "gateway_log_retention_days" {
   type        = number
   default     = 7
 }
+
+variable "datadog_synthetics_enabled" {
+  description = "Cria testes sintéticos, alertas e dashboard de uptime no Datadog."
+  type        = bool
+  default     = false
+}
+
+variable "datadog_app_key" {
+  description = "Application key do Datadog, fornecida por TF_VAR_datadog_app_key."
+  type        = string
+  sensitive   = true
+  default     = ""
+
+  validation {
+    condition     = !var.datadog_synthetics_enabled || trimspace(var.datadog_app_key) != ""
+    error_message = "datadog_app_key precisa ser informada quando datadog_synthetics_enabled=true."
+  }
+}
+
+variable "datadog_synthetic_locations" {
+  description = "Locations gerenciadas pelo Datadog para os testes sintéticos."
+  type        = list(string)
+  default     = ["aws:us-east-1"]
+}
+
+variable "datadog_notification_targets" {
+  description = "Handles opcionais de notificacao, por exemplo @slack-observabilidade."
+  type        = list(string)
+  default     = []
+}
