@@ -120,7 +120,33 @@ resource "datadog_dashboard_json" "uptime" {
           ]
         }
       },
+
       {
+        definition = {
+          type  = "query_value"
+          title = "Ordens criadas"
+          requests = [
+            {
+              q = "sum:oficina_mecanica.orders.created{service:${var.project},env:${var.ambiente}}.as_count()"
+            }
+          ]
+          autoscale = true
+          precision = 0
+        }
+      },
+      {
+        definition = {
+          type  = "timeseries"
+          title = "Falhas de negocio na criacao de ordens"
+          requests = [
+            {
+              q            = "sum:oficina_mecanica.orders.creation_failed{service:${var.project},env:${var.ambiente}} by {reason}.as_count()"
+              display_type = "bars"
+              style        = { line_type = "solid", line_width = "normal" }
+            }
+          ]
+        }
+      },      {
         definition = {
           type  = "query_value"
           title = "Execucoes sinteticas"
