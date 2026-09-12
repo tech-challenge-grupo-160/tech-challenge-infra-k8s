@@ -177,18 +177,33 @@ logs dos containers e recebe traces APM; não é necessário colocar o Agent den
 do container da API. O mesmo apply cria um segredo no Secrets Manager, e o
 script instrumenta as duas Lambdas com a extensão e a camada .NET oficiais.
 
-A chave deve ser preenchida localmente no inventory do ambiente antes de aplicar:
+A chave deve ser fornecida por variavel de ambiente antes de aplicar; nunca
+versione chaves no inventory:
 
 ```bash
-# infra/inventories/dev/terraform.tfvars
-datadog_enabled = true
-datadog_api_key  = "CHAVE_NOVA_DO_DATADOG"
+export TF_VAR_datadog_api_key="<API_KEY>"
+export TF_VAR_datadog_app_key="<APP_KEY>"
 ```
 
-No `dev`, o inventory já deixa `datadog_enabled = true`. Para ambientes sem
-Datadog, mantenha a variável como `false`. O Terraform usa o provider Helm e a
-AWS CLI para autenticar no cluster; o `npx` é usado para executar o
-`datadog-ci` que instrumenta as Lambdas.
+No `dev`, o inventory deixa `datadog_enabled = true` e
+`datadog_synthetics_enabled = true`. Para ambientes sem Datadog ou sem testes
+sinteticos, mantenha essas variaveis como `false`. Os testes criam:
+
+- `GET <gateway_url>/<ambiente>/health/live` para a API, esperando HTTP 200;
+- `POST <gateway_url>/<ambiente>/auth` para a Lambda, usando `{}` e esperando
+  HTTP 400 de validacao, sem credenciais reais;
+- alertas de indisponibilidade com retry e renovacao a cada 60 minutos;
+- um dashboard com historico dos monitores e latencia.
+
+As locations, os destinatarios e a frequencia podem ser ajustados por:
+
+```hcl
+datadog_synthetic_locations = ["aws:us-east-1"]
+datadog_notification_targets = ["@slack-observabilidade"]
+```
+
+O Terraform usa o provider Helm e a AWS CLI para autenticar no cluster; o
+`npx` e usado para executar o `datadog-ci` que instrumenta as Lambdas.
 
 Para conferir a instalação:
 
