@@ -146,7 +146,7 @@ resource "datadog_dashboard_json" "uptime" {
             }
           ]
         }
-      },      {
+        }, {
         definition = {
           type  = "query_value"
           title = "Execucoes sinteticas"
