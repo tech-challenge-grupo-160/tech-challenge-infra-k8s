@@ -9,13 +9,13 @@ locals {
 resource "datadog_synthetics_test" "api_uptime" {
   count = var.datadog_synthetics_enabled ? 1 : 0
 
-  name      = "${var.projeto}-${var.ambiente}-api-uptime"
+  name      = "${var.project}-${var.ambiente}-api-uptime"
   type      = "api"
   subtype   = "http"
   status    = "live"
   locations = var.datadog_synthetic_locations
   message   = local.datadog_uptime_message
-  tags      = ["service:${var.projeto}", "env:${var.ambiente}", "component:api", "check:uptime"]
+  tags      = ["service:${var.project}", "env:${var.ambiente}", "component:api", "check:uptime"]
 
   request_definition {
     method = "GET"
@@ -45,13 +45,13 @@ resource "datadog_synthetics_test" "api_uptime" {
 resource "datadog_synthetics_test" "lambda_uptime" {
   count = var.datadog_synthetics_enabled ? 1 : 0
 
-  name      = "${var.projeto}-${var.ambiente}-lambda-uptime"
+  name      = "${var.project}-${var.ambiente}-lambda-uptime"
   type      = "api"
   subtype   = "http"
   status    = "live"
   locations = var.datadog_synthetic_locations
   message   = local.datadog_uptime_message
-  tags      = ["service:${var.projeto}", "env:${var.ambiente}", "component:lambda", "check:uptime"]
+  tags      = ["service:${var.project}", "env:${var.ambiente}", "component:lambda", "check:uptime"]
 
   request_definition {
     method = "POST"
@@ -88,7 +88,7 @@ resource "datadog_dashboard_json" "uptime" {
   count = var.datadog_synthetics_enabled ? 1 : 0
 
   dashboard = jsonencode({
-    title       = "${var.projeto} - Uptime - ${var.ambiente}"
+    title       = "${var.project} - Uptime - ${var.ambiente}"
     description = "Historico dos monitores sinteticos da API e da Lambda."
     layout_type = "ordered"
     is_read_only = false
@@ -119,7 +119,7 @@ resource "datadog_dashboard_json" "uptime" {
           title = "Latencia dos testes sinteticos"
           requests = [
             {
-              q             = "avg:synthetics.http.response.time{service:${var.projeto},env:${var.ambiente}} by {component}"
+              q             = "avg:synthetics.http.response.time{service:${var.project},env:${var.ambiente}} by {component}"
               display_type  = "line"
               style         = { line_type = "solid", line_width = "normal" }
             }
@@ -132,7 +132,7 @@ resource "datadog_dashboard_json" "uptime" {
           title = "Execucoes sinteticas"
           requests = [
             {
-              q = "sum:synthetics.test_runs{service:${var.projeto},env:${var.ambiente}}"
+              q = "sum:synthetics.test_runs{service:${var.project},env:${var.ambiente}}"
             }
           ]
           autoscale = true
