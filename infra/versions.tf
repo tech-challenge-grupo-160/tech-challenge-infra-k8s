@@ -16,6 +16,11 @@ terraform {
       source  = "hashicorp/helm"
       version = "~> 2.17"
     }
+
+    datadog = {
+      source  = "DataDog/datadog"
+      version = "~> 3.50"
+    }
   }
 
   # Configuracao vem por -backend-config no init: o nome do bucket contem o
@@ -23,6 +28,10 @@ terraform {
   backend "s3" {}
 }
 
+provider "datadog" {
+  api_key = trimspace(var.datadog_api_key) != "" ? var.datadog_api_key : null
+  app_key = trimspace(var.datadog_app_key) != "" ? var.datadog_app_key : null
+}
 provider "aws" {
   region = var.region
 
