@@ -15,4 +15,4 @@ quantidade_azs = 2
 criar_cluster = true
 
 datadog_enabled = true
-datadog_api_key  = ""
+datadog_api_key = ""
