@@ -70,10 +70,10 @@ variable "datadog_enabled" {
 }
 
 variable "datadog_api_key" {
-  description = "Chave da API Datadog. Informada pelo inventory local; nunca versionar o valor real."
+  description = "Chave da API Datadog. Informada pelo inventory local ou env TF_VAR_datadog_api_key; nunca versionar o valor real."
   type        = string
   sensitive   = true
-  default     = ""
+  default     = "dummy_datadog_key_local"
 
   validation {
     condition     = !var.datadog_enabled || trimspace(var.datadog_api_key) != ""
