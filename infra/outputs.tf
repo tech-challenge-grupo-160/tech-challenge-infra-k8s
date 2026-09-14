@@ -1,42 +1,149 @@
-output "cluster_name" {
-  description = "Nome do cluster kind criado"
-  value       = kind_cluster.oficina_mecanica.name
+output "vpc_id" {
+  description = "Id da VPC."
+  value       = aws_vpc.principal.id
+}
+
+output "subnets_publicas" {
+  description = "Subnets publicas: ALB e NAT Gateway."
+  value       = aws_subnet.publica[*].id
+}
+
+output "subnets_privadas" {
+  description = "Subnets privadas: banco de dados, Lambda e nodes do cluster."
+  value       = aws_subnet.privada[*].id
+}
+
+output "sg_alb" {
+  description = "Security group do balanceador."
+  value       = aws_security_group.alb.id
+}
+
+output "sg_nodes" {
+  description = "Security group dos nodes do cluster."
+  value       = aws_security_group.nodes.id
+}
+
+output "sg_banco" {
+  description = "Security group do banco. Consumido pelo repositorio infra-database."
+  value       = aws_security_group.banco.id
+}
+
+output "sg_lambda" {
+  description = "Security group da Lambda de autenticacao."
+  value       = aws_security_group.lambda.id
+}
+
+output "eks_cluster_role_arn" {
+  description = "ARN da role usada pelo control plane do EKS."
+  value       = "arn:aws:iam::${data.aws_caller_identity.atual.account_id}:role/LabRole"
+}
+
+output "eks_node_role_arn" {
+  description = "ARN da role usada pelos nodes do EKS."
+  value       = "arn:aws:iam::${data.aws_caller_identity.atual.account_id}:role/LabRole"
+}
+
+output "azs" {
+  description = "Zonas de disponibilidade em uso."
+  value       = local.azs
+}
+
+output "jwt_secret_name" {
+  description = "Nome do secret com a chave de assinatura do JWT. Consumido pela Lambda, pelo authorizer e pela API - nunca o valor."
+  value       = aws_secretsmanager_secret.jwt_signing_key.name
+}
+
+output "jwt_secret_arn" {
+  description = "ARN do secret da chave de assinatura do JWT."
+  value       = aws_secretsmanager_secret.jwt_signing_key.arn
+}
+
+output "gateway_url" {
+  description = "URL base do API Gateway. Rota de autenticacao: POST <url>/auth."
+  value       = aws_apigatewayv2_stage.principal.invoke_url
+}
+
+output "gateway_api_id" {
+  description = "Id do HTTP API. Consumido pela issue #43 ao criar o authorizer."
+  value       = aws_apigatewayv2_api.principal.id
+}
+
+output "gateway_rotas_do_cluster_ativas" {
+  description = "Falso enquanto alb_listener_arn estiver vazio: so a rota de autenticacao existe."
+  value       = local.integrar_cluster
+}
+
+output "sg_endpoints" {
+  description = "Security group dos endpoints de interface da VPC."
+  value       = aws_security_group.endpoints.id
+}
+
+output "endpoint_secrets_manager" {
+  description = "Id do endpoint de interface do Secrets Manager. A Lambda na VPC depende dele para ler segredos."
+  value       = aws_vpc_endpoint.secrets_manager.id
+}
+
+output "datadog_api_key_secret_arn" {
+  description = "ARN do segredo da API key do Datadog, usado para instrumentar as Lambdas."
+  value       = one(aws_secretsmanager_secret.datadog_api_key[*].arn)
+  sensitive   = true
+}
+
+# ------------------------------------------------------------------ cluster
+#
+# Nulos enquanto criar_cluster estiver desligado. Quem consome deve tratar isso,
+# em vez de assumir que o cluster existe.
+
+output "cluster_existe" {
+  description = "Se o cluster EKS foi provisionado neste ambiente."
+  value       = var.criar_cluster
+}
+
+output "cluster_nome" {
+  description = "Nome do cluster EKS. Usado no `aws eks update-kubeconfig` das pipelines."
+  value       = one(aws_eks_cluster.principal[*].name)
 }
 
 output "cluster_endpoint" {
-  description = "Endpoint da API do Kubernetes usado pelo kubectl e provider kubernetes"
-  value       = kind_cluster.oficina_mecanica.endpoint
+  description = "Endpoint da API do cluster."
+  value       = one(aws_eks_cluster.principal[*].endpoint)
 }
 
-output "kubeconfig_path" {
-  description = "Caminho do kubeconfig gerado pelo kind"
-  value       = kind_cluster.oficina_mecanica.kubeconfig_path
+output "cluster_oidc_issuer" {
+  description = "Issuer OIDC do cluster, base para IRSA."
+  value       = one(aws_eks_cluster.principal[*].identity[0].oidc[0].issuer)
 }
 
-output "namespace" {
-  description = "Namespace criado para a aplicacao"
-  value       = kubernetes_namespace.oficina_mecanica.metadata[0].name
+output "cluster_kubeconfig_comando" {
+  description = "Comando que gera o kubeconfig. E assim que as pipelines se conectam ao cluster."
+  value = var.criar_cluster ? join(" ", [
+    "aws eks update-kubeconfig",
+    "--region ${var.region}",
+    "--name ${aws_eks_cluster.principal[0].name}"
+  ]) : null
 }
 
-output "next_steps" {
-  description = "Comandos para verificar o cluster apos o apply"
-  value       = <<-EOT
+output "alb_dns" {
+  description = "DNS interno do balanceador da API. So alcancavel de dentro da VPC - a porta publica e o gateway."
+  value       = one(aws_lb.api[*].dns_name)
+}
 
-    Cluster '${kind_cluster.oficina_mecanica.name}' pronto.
+output "alb_listener_arn" {
+  description = "ARN do listener do balanceador. Alvo da integracao do API Gateway."
+  value       = one(aws_lb_listener.api[*].arn)
+}
 
-    Verifique os nos:
-      kubectl get nodes
+output "ecr_api_url" {
+  description = "URL do repositorio de imagens da API. Destino do docker push no deploy."
+  value       = aws_ecr_repository.api.repository_url
+}
 
-    Aplique os manifestos da aplicacao:
-      kubectl apply -k k8s/
+output "nat_ip_publico" {
+  description = "IP fixo de saida das subnets privadas. Util para liberar em firewall de terceiros."
+  value       = one(aws_eip.nat[*].public_ip)
+}
 
-    Verifique os pods:
-      kubectl get pods -n ${var.namespace}
-
-    Acesse a API via NodePort:
-      http://localhost:${var.api_host_port}
-
-    Para destruir o cluster quando nao precisar mais:
-      terraform destroy
-  EOT
+output "node_group_asg" {
+  description = "Nome do Auto Scaling group dos nodes. E nele que o Cluster Autoscaler mexe - util para conferir a capacidade com `aws autoscaling describe-auto-scaling-groups`."
+  value       = one(aws_eks_node_group.principal[*].resources[0].autoscaling_groups[0].name)
 }

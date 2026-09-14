@@ -1,0 +1,326 @@
+name: Terraform CI
+
+on:
+  pull_request:
+    branches: [develop, homolog, main]
+  push:
+    branches: [develop, homolog, main]
+  workflow_dispatch:
+    inputs:
+      ambiente:
+        description: "Ambiente a aplicar"
+        type: choice
+        options: [dev, hom, prod]
+        default: dev
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write   # necessario para OIDC quando o apply for habilitado (issue #54)
+
+env:
+  TF_VERSION: '1.9.8'
+  TF_IN_AUTOMATION: 'true'
+  # Diretorio raiz do Terraform neste repositorio.
+  TF_DIR: 'infra'
+  # Usado apenas no job validate, que nao precisa de backend. O job de plan
+  # roda init sem esta flag: com -backend=false o plan aborta com
+  # "Backend initialization required".
+
+  TF_INIT_ARGS: '-backend=false'
+  # Chave da API Datadog, lida pelo Terraform como var.datadog_api_key.
+  # Valor real no secret TF_VAR_datadog_api_key; nunca versionar.
+  TF_VAR_datadog_api_key: ${{ secrets.TF_VAR_datadog_api_key }}
+
+jobs:
+  validate:
+    name: Format e validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform fmt
+        id: fmt
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform fmt -check -recursive -diff
+        continue-on-error: true
+
+      - name: Terraform init
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init ${{ env.TF_INIT_ARGS }}
+
+      - name: Terraform validate
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform validate -no-color
+
+      - name: Falha se a formatacao estiver fora do padrao
+        if: steps.fmt.outcome == 'failure'
+        run: |
+          echo "::error::Arquivos Terraform fora do padrao. Rode 'terraform fmt -recursive' e commite."
+          exit 1
+
+      # A credencial do Learner Lab e temporaria e trocada a cada sessao.
+      # Quando os secrets nao existem, os passos abaixo sao pulados em vez de
+      # falhar - assim o CI continua util sem depender de sessao ativa.
+      - name: Verifica se ha credenciais da sessao
+        id: creds
+        env:
+          KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        run: |
+          if [ -n "$KEY" ]; then
+            echo "has=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Sem credenciais da sessao. Cadastre os secrets - issue #54."
+          fi
+
+      - name: Autenticar na AWS
+        if: steps.creds.outputs.has == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Confirmar identidade na AWS
+        if: steps.creds.outputs.has == 'true'
+        run: |
+          # Prova de autenticacao exigida pela issue #54.
+          # A conta e mascarada: os repositorios sao publicos.
+          aws sts get-caller-identity --query 'Arn' --output text | sed 's/[0-9]\{12\}/<conta>/'
+
+  plan:
+    name: Plan (${{ matrix.env }})
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [dev, hom, prod]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Verifica pre-requisitos do plan
+        id: check
+        env:
+          BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        run: |
+          ok=true
+          if [ ! -f "${TF_DIR}/inventories/${{ matrix.env }}/terraform.tfvars" ]; then
+            echo "::notice::inventories/${{ matrix.env }} ainda nao existe - plan ignorado."
+            ok=false
+          fi
+          # O backend S3 e declarado vazio e configurado no init. Sem o bucket
+          # nao ha como inicializar, entao o plan e pulado em vez de falhar.
+          if [ -z "$BUCKET" ]; then
+            echo "::notice::TF_STATE_BUCKET nao definida - rode o bootstrap (issue #57) e cadastre a variavel."
+            ok=false
+          fi
+          # A sessao do Learner Lab expira a cada ~4h. Sem credencial o plan e
+          # pulado, para o CI continuar util para fmt e validate nesse intervalo.
+          if [ -z "$KEY" ]; then
+            echo "::notice::Sem credenciais da sessao - rode scripts/renova-secrets.sh no repositorio principal."
+            ok=false
+          fi
+          echo "exists=$ok" >> "$GITHUB_OUTPUT"
+
+      - name: Autenticar na AWS
+        if: steps.check.outputs.exists == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Terraform init
+        if: steps.check.outputs.exists == 'true'
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ matrix.env }}/rede.tfstate" \
+            -backend-config="region=${{ vars.AWS_REGION || 'us-east-1' }}" \
+            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE || 'tc-grupo160-tflock' }}"
+
+      # Com as credenciais cadastradas (#54), um plan quebrado passa a bloquear
+      # o PR. Antes tinha continue-on-error porque falharia sempre por falta de
+      # credencial - e isso acabava escondendo erro de verdade.
+      - name: Terraform plan
+        if: steps.check.outputs.exists == 'true'
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          if ! terraform plan -no-color -input=false \
+            -var-file="inventories/${{ matrix.env }}/terraform.tfvars" \
+            > "${GITHUB_WORKSPACE}/plan-${{ matrix.env }}.txt" 2>&1; then
+            cat "${GITHUB_WORKSPACE}/plan-${{ matrix.env }}.txt"
+            exit 1
+          fi
+
+      - name: Comenta o plan no Pull Request
+        if: steps.check.outputs.exists == 'true' && !cancelled()
+        uses: actions/github-script@v7
+        env:
+          MATRIX_ENV: ${{ matrix.env }}
+        with:
+          script: |
+            const fs = require('fs');
+            const env = process.env.MATRIX_ENV;
+            let body;
+            try {
+              let out = fs.readFileSync(`plan-${env}.txt`, 'utf8');
+              // O repositorio e publico e o plan vai inteiro para o comentario.
+              // Mascarar aqui, e nao na geracao do arquivo, garante que
+              // qualquer caminho que leve ao comentario passe pela mascara.
+              // 12 digitos seguidos na saida do terraform e id de conta AWS.
+              out = out.replace(/\d{12}/g, '<conta>');
+              // Comentario do GitHub tem limite de 65536 caracteres
+              const LIMIT = 60000;
+              if (out.length > LIMIT) {
+                out = out.slice(0, LIMIT) + '\n\n... saida truncada, veja o log completo do job.';
+              }
+              body = `### Terraform plan — \`${env}\`\n\n<details><summary>Ver plan</summary>\n\n\`\`\`hcl\n${out}\n\`\`\`\n\n</details>`;
+            } catch (e) {
+              body = `### Terraform plan — \`${env}\`\n\nNao foi possivel ler a saida do plan. Veja o log do job.`;
+            }
+            body += `\n\n> Plan real contra a AWS. O apply roda ao mergear em \`homolog\` ou \`main\`.`;
+
+            const marker = `<!-- tf-plan-${env} -->`;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(marker));
+            const full = `${marker}\n${body}`;
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                comment_id: existing.id, body: full,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: context.issue.number, body: full,
+              });
+            }
+
+  apply:
+    name: Apply
+    runs-on: ubuntu-latest
+    needs: validate
+    # Cada branch aplica o seu ambiente: develop aplica dev, homolog aplica hom
+    # e main aplica prod. Por workflow_dispatch, qualquer branch aplica o
+    # ambiente escolhido no input.
+    #
+    # develop aplicando dev e mudanca deliberada: o ambiente de desenvolvimento
+    # passa a acompanhar a branch sem ninguem precisar lembrar de disparar o
+    # workflow. O preco e que todo merge em develop toca a AWS - o plan do PR
+    # continua sendo o momento de revisar o que vai acontecer.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && (github.ref_name == 'develop' || github.ref_name == 'homolog' || github.ref_name == 'main'))
+    environment: ${{ fromJSON('{"dev":"desenvolvimento","hom":"homologacao","prod":"producao"}')[github.event_name == 'workflow_dispatch' && inputs.ambiente || (github.ref_name == 'main' && 'prod' || (github.ref_name == 'homolog' && 'hom' || 'dev'))] }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      # Aqui a credencial e obrigatoria: sem ela nao ha apply, entao falhar e
+      # o comportamento correto - diferente do plan, que e pulado.
+      - name: Exige credenciais e backend
+        env:
+          KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::Sem credenciais da AWS. Rode scripts/renova-secrets.sh no repositorio principal."
+            exit 1
+          fi
+          if [ -z "$BUCKET" ]; then
+            echo "::error::TF_STATE_BUCKET nao definida. Aplique o bootstrap e cadastre a variavel."
+            exit 1
+          fi
+
+      - name: Autenticar na AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Resolver ambiente
+        id: amb
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENV="${{ inputs.ambiente }}"
+          else
+            case "${{ github.ref_name }}" in
+              main)    ENV="prod" ;;
+              homolog) ENV="hom" ;;
+              *)       ENV="dev" ;;
+            esac
+          fi
+          echo "env=$ENV" >> "$GITHUB_OUTPUT"
+          echo "Aplicando o ambiente: $ENV  (branch: ${{ github.ref_name }})"
+          # Aplicar prod de uma branch que nao seja main e permitido de
+          # proposito - o ambiente do lab e recriado a cada sessao e as vezes
+          # e preciso subir tudo de uma vez. Fica registrado no log e no resumo.
+          if [ "$ENV" = "prod" ] && [ "${{ github.ref_name }}" != "main" ]; then
+            echo "::warning::Aplicando prod a partir da branch ${{ github.ref_name }}, nao de main."
+          fi
+
+      # O state e separado por ambiente: hom e prod nunca compartilham arquivo.
+      - name: Terraform init
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ steps.amb.outputs.env }}/rede.tfstate" \
+            -backend-config="region=${{ vars.AWS_REGION || 'us-east-1' }}" \
+            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE || 'tc-grupo160-tflock' }}"
+
+      - name: Terraform apply
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          terraform apply -auto-approve -input=false \
+            -var-file="inventories/${{ steps.amb.outputs.env }}/terraform.tfvars"
+
+      - name: Resumo do que existe agora
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          # Sem pipefail o `terraform output | sed` devolveria o codigo do sed,
+          # e uma falha do terraform passaria despercebida.
+          set -o pipefail
+          {
+            echo "### Apply concluido - ambiente \`${{ steps.amb.outputs.env }}\`"
+            echo ""
+            echo "Disparado por \`${{ github.event_name }}\` na branch \`${{ github.ref_name }}\`."
+            echo ""
+            echo '```'
+            # Os valores sao ids de recurso, nao ha segredo aqui - mas
+            # lab_role_arn e os ARNs carregam o id da conta, e o resumo do job
+            # e publico como o repositorio. Mesma mascara do comentario do plan.
+            terraform output | sed 's/[0-9]\{12\}/<conta>/g'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

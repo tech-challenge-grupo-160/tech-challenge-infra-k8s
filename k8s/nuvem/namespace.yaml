@@ -1,0 +1,13 @@
+# Namespace da aplicacao (criterio de aceite da issue #60).
+#
+# Nasce aqui, e nao no Terraform, de proposito: criar namespace por Terraform
+# exigiria o provider kubernetes configurado a partir do endpoint do cluster, e
+# o CI roda `terraform plan` na matriz dev/hom/prod a cada PR. Nos ambientes sem
+# cluster o provider nao autentica e o plan quebraria - a mesma armadilha que o
+# api-gateway.tf ja documenta sobre o `data aws_lambda_function`.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: oficina-mecanica
+  labels:
+    app.kubernetes.io/part-of: oficina-mecanica
