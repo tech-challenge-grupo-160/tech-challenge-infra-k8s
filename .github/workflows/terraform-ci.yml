@@ -28,6 +28,9 @@ env:
   # "Backend initialization required".
 
   TF_INIT_ARGS: '-backend=false'
+  # Chave da API Datadog, lida pelo Terraform como var.datadog_api_key.
+  # Valor real no secret TF_VAR_datadog_api_key; nunca versionar.
+  TF_VAR_datadog_api_key: ${{ secrets.TF_VAR_datadog_api_key }}
 
 jobs:
   validate:
