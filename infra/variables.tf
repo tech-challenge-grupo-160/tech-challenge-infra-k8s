@@ -152,9 +152,13 @@ variable "lambdas_publicadas" {
     Em operacao normal isso e sempre verdadeiro - o pipeline publica as funcoes
     antes de o Terraform rodar. Desligar serve para aplicar so a infraestrutura,
     sem as aplicacoes, quando nao ha funcao para permitir.
+
+    O default e true porque o pipeline nao passa esta variavel. Com false, todo
+    apply pelo CI removia as permissoes e o gateway respondia 500 no /auth -
+    descoberto em 14/09, na primeira subida dos tres ambientes pelo CI.
   EOT
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "lambda_authorizer_nome" {
