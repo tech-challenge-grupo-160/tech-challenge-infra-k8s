@@ -16,4 +16,4 @@ criar_cluster = true
 # O Agent e instalado no EKS pelo Terraform. A chave entra por
 # TF_VAR_datadog_api_key e nunca deve ser versionada neste arquivo.
 datadog_enabled = true
-datadog_site    = "us5.datadoghq.com"
+datadog_site    = "datadoghq.com"
