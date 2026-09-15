@@ -1,0 +1,41 @@
+# Ajustes do Deployment da API para rodar no EKS.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oficina-mecanica-api
+spec:
+  template:
+    spec:
+      containers:
+        - name: api
+          # IfNotPresent, nao Never. `Never` era correto no kind, onde a imagem
+          # era carregada no node por fora com `kind load`. No EKS os nodes sao
+          # efemeros e nao tem imagem alguma pre-carregada: com Never o pod fica
+          # em ErrImageNeverPull para sempre.
+          imagePullPolicy: IfNotPresent
+          env:
+            # A connection string do RDS e a chave do JWT vem do Secret
+            # `api-secret`, que o deploy cria a partir do Secrets Manager. Ver
+            # RFC-0002: a API le o segredo no startup, entao trocar o segredo
+            # exige rollout restart dos pods.
+            - name: ConnectionStrings__DefaultConnection
+              valueFrom:
+                secretKeyRef:
+                  name: api-secret
+                  key: ConnectionStrings__DefaultConnection
+            - name: Jwt__SecretKey
+              valueFrom:
+                secretKeyRef:
+                  name: api-secret
+                  key: Jwt__SecretKey
+          # O /health do ASP.NET consulta o banco. Na nuvem o RDS pode levar
+          # alguns segundos a mais para aceitar a primeira conexao, e a migration
+          # roda no startup - por isso a folga maior que a do kind.
+          readinessProbe:
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            initialDelaySeconds: 90
+            periodSeconds: 20
+            failureThreshold: 3

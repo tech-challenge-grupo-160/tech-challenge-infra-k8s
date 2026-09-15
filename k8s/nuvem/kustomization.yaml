@@ -1,0 +1,41 @@
+# Overlay de nuvem: a API no EKS, com banco no RDS (issue #52 / F3-18).
+#
+# O kustomization.yaml da raiz continua servindo o desenvolvimento local com
+# kind, com o PostgreSQL dentro do cluster. Este overlay nao o substitui - ver
+# issue #65, que trata de aposentar o fluxo kind.
+#
+# Duas diferencas que importam:
+#
+# 1. Nao inclui postgres/. Na nuvem o banco e o RDS gerenciado, provisionado
+#    pelo repositorio tech-challenge-infra-database (issue #61). Subir um
+#    PostgreSQL dentro do cluster aqui criaria um segundo banco, vazio, e a API
+#    conversaria com o errado.
+#
+# 2. A imagem vem do ECR, com tag versionada pelo SHA do commit. O deploy
+#    substitui o valor com `kustomize edit set image` - o placeholder abaixo
+#    nunca e aplicado como esta.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: oficina-mecanica
+
+resources:
+  - namespace.yaml
+  - ../api
+
+patches:
+  - path: patch-api.yaml
+    target:
+      kind: Deployment
+      name: oficina-mecanica-api
+  - path: patch-service.yaml
+    target:
+      kind: Service
+      name: oficina-mecanica-api
+
+# Substituido no deploy por:
+#   kustomize edit set image oficina-mecanica-api=<conta>.dkr.ecr.<regiao>.amazonaws.com/tc-grupo160-<amb>-api:<sha>
+images:
+  - name: oficina-mecanica-api
+    newName: oficina-mecanica-api
+    newTag: placeholder

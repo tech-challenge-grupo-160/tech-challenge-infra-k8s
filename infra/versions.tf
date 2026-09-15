@@ -1,17 +1,56 @@
 terraform {
-  required_version = ">= 1.6.0"
-
-  backend "local" {}
+  required_version = ">= 1.9.0"
 
   required_providers {
-    kind = {
-      source  = "tehcyx/kind"
-      version = "~> 0.6"
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
     }
 
-    kubernetes = {
-      source  = "hashicorp/kubernetes"
-      version = "~> 2.30"
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
+
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 2.17"
+    }
+  }
+
+  # Configuracao vem por -backend-config no init: o nome do bucket contem o
+  # id da conta e este repositorio e publico. Ver bootstrap/README.md.
+  backend "s3" {}
+}
+
+provider "aws" {
+  region = var.region
+
+  default_tags {
+    tags = {
+      Project     = var.project
+      Environment = var.ambiente
+      ManagedBy   = "terraform"
+    }
+  }
+}
+
+provider "helm" {
+  kubernetes {
+    host                   = try(aws_eks_cluster.principal[0].endpoint, "https://127.0.0.1")
+    cluster_ca_certificate = try(base64decode(aws_eks_cluster.principal[0].certificate_authority[0].data), null)
+
+    exec {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command     = "aws"
+      args = [
+        "eks",
+        "get-token",
+        "--cluster-name",
+        try(aws_eks_cluster.principal[0].name, "disabled"),
+        "--region",
+        var.region
+      ]
     }
   }
 }

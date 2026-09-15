@@ -1,72 +1,221 @@
-variable "cluster_name" {
-  description = "Nome do cluster kind que sera criado"
+variable "region" {
+  description = "Regiao AWS onde os recursos serao provisionados."
   type        = string
-  default     = "oficina-mecanica"
+  default     = "us-east-1"
 }
 
-variable "namespace" {
-  description = "Namespace Kubernetes que recebera os recursos da aplicacao"
+variable "project" {
+  description = "Prefixo dos recursos."
   type        = string
-  default     = "oficina-mecanica"
+  default     = "tc-grupo160"
 }
 
-variable "kubernetes_version" {
-  description = "Versao da imagem do node kind"
+variable "ambiente" {
+  description = "Ambiente logico (dev, hom, prod)."
   type        = string
-  default     = "v1.31.0"
+
+  validation {
+    condition     = contains(["dev", "hom", "prod"], var.ambiente)
+    error_message = "ambiente deve ser dev, hom ou prod."
+  }
 }
 
-variable "control_plane_count" {
-  description = "Numero de nos control-plane (use 1 para desenvolvimento local)"
+variable "vpc_cidr" {
+  description = "CIDR da VPC."
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "quantidade_azs" {
+  description = "Quantidade de zonas de disponibilidade. Minimo 2 para o RDS."
   type        = number
-  default     = 1
+  default     = 2
+
+  validation {
+    condition     = var.quantidade_azs >= 2
+    error_message = "O subnet group do RDS exige ao menos 2 AZs."
+  }
 }
 
-variable "worker_count" {
-  description = "Numero de nos worker onde os pods da aplicacao serao agendados"
+variable "ecr_imagens_mantidas" {
+  description = <<-EOT
+    Quantas imagens o repositorio da API guarda antes de expirar as mais
+    antigas. Suficiente para rollback de alguns deploys sem deixar o registry
+    crescer sem limite.
+  EOT
+  type        = number
+  default     = 10
+}
+
+variable "criar_cluster" {
+  description = <<-EOT
+    Cria o cluster EKS, o node group e o NAT Gateway das subnets privadas.
+
+    Desligado por padrao, e de proposito: o control plane cobra US$ 0,10/hora
+    enquanto existir e NAO e suspenso com a sessao do Learner Lab, diferente das
+    instancias EC2. Com o NAT, dao ~US$ 3,50/dia contra um orcamento de US$ 100.
+
+    Nao esta ligado em nenhum inventory. Para subir o cluster em dev, ligue em
+    inventories/dev/terraform.tfvars e desligue quando terminar - a RFC-0001
+    pede `terraform destroy` ao fim de cada sessao de trabalho.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "datadog_enabled" {
+  description = "Instala o Datadog Agent no EKS por Helm."
+  type        = bool
+  default     = false
+}
+
+variable "datadog_api_key" {
+  description = "Chave da API Datadog. Informada pelo inventory local ou env TF_VAR_datadog_api_key; nunca versionar o valor real."
+  type        = string
+  sensitive   = true
+  default     = "dummy_datadog_key_local"
+
+  validation {
+    condition     = !var.datadog_enabled || trimspace(var.datadog_api_key) != ""
+    error_message = "datadog_api_key precisa ser informada quando datadog_enabled=true."
+  }
+}
+
+variable "datadog_site" {
+  description = "Site do Datadog (ex: datadoghq.com, us5.datadoghq.com, datadoghq.eu)."
+  type        = string
+  default     = "datadoghq.com"
+}
+
+variable "cluster_version" {
+  description = <<-EOT
+    Versao do Kubernetes no EKS.
+
+    Nem a mais nova nem a mais velha: `aws eks describe-cluster-versions`
+    listava 1.31 a 1.36 em 29/08/2026. A 1.31 sai de suporte primeiro e a 1.36
+    e recente demais para addons; 1.33 fica no meio.
+  EOT
+  type        = string
+  default     = "1.33"
+}
+
+variable "node_instance_types" {
+  description = <<-EOT
+    Tipos de instancia dos nodes.
+
+    t3.medium e o menor que serve: o VPC CNI reserva IPs por ENI e limita quantos
+    pods cabem no node, e em t3.micro os pods de sistema - CoreDNS, kube-proxy,
+    metrics-server - ja ocupam quase tudo, sem sobrar espaco para a aplicacao.
+  EOT
+  type        = list(string)
+  default     = ["t3.medium"]
+}
+
+variable "node_disk_size" {
+  description = "Disco de cada node, em GB."
+  type        = number
+  default     = 20
+}
+
+variable "node_desired_size" {
+  description = "Quantidade inicial de nodes. Depois do primeiro apply, quem manda e o autoscaling."
   type        = number
   default     = 2
 }
 
-variable "api_host_port" {
-  description = "Porta do host Windows mapeada para a porta 30080 do NodePort da API"
+variable "node_min_size" {
+  description = "Minimo de nodes."
   type        = number
-  default     = 8080
+  default     = 2
 }
 
-variable "ingress_http_port" {
-  description = "Porta HTTP do host mapeada para o ingress controller"
+variable "node_max_size" {
+  description = "Maximo de nodes que o autoscaling pode criar."
   type        = number
-  default     = 80
+  default     = 4
 }
 
-variable "ingress_https_port" {
-  description = "Porta HTTPS do host mapeada para o ingress controller"
+variable "lambda_auth_nome" {
+  description = "Nome da funcao Lambda de autenticacao. Vazio usa <project>-auth-<ambiente>."
+  type        = string
+  default     = ""
+}
+
+variable "lambdas_publicadas" {
+  description = <<-EOT
+    Se as funcoes Lambda ja existem na conta.
+
+    A integracao do gateway apenas monta o ARN da funcao, e por isso tolera que
+    ela nao exista. A `aws_lambda_permission` nao: a API AddPermission devolve
+    404 se a funcao nao estiver publicada, e o apply falha.
+
+    Em operacao normal isso e sempre verdadeiro - o pipeline publica as funcoes
+    antes de o Terraform rodar. Desligar serve para aplicar so a infraestrutura,
+    sem as aplicacoes, quando nao ha funcao para permitir.
+
+    O default e true porque o pipeline nao passa esta variavel. Com false, todo
+    apply pelo CI removia as permissoes e o gateway respondia 500 no /auth -
+    descoberto em 14/09, na primeira subida dos tres ambientes pelo CI.
+  EOT
+  type        = bool
+  default     = true
+}
+
+variable "lambda_authorizer_nome" {
+  description = "Nome da funcao do Lambda authorizer. Vazio usa <project>-authorizer-<ambiente>."
+  type        = string
+  default     = ""
+}
+
+variable "authorizer_cache_ttl" {
+  description = <<-EOT
+    Segundos que o gateway guarda a resposta do authorizer, com o header
+    Authorization como chave. 300 e o valor da RFC-0002.
+
+    Zerar torna a expiracao do token exata na borda, ao custo de uma invocacao
+    da funcao por requisicao. Util para depurar o authorizer; caro em regime.
+  EOT
   type        = number
-  default     = 443
+  default     = 300
+
+  validation {
+    condition     = var.authorizer_cache_ttl >= 0 && var.authorizer_cache_ttl <= 3600
+    error_message = "O TTL do authorizer precisa estar entre 0 e 3600 segundos."
+  }
 }
 
-variable "postgres_user" {
-  description = "Usuario do PostgreSQL"
-  type        = string
-  default     = "postgres"
+variable "node_port_api" {
+  description = <<-EOT
+    Porta do NodePort em que o Service da API atende no cluster. E nela que o
+    target group do balanceador registra os nodes.
+
+    Precisa casar com o nodePort do manifest em k8s/nuvem/patch-service.yaml.
+    Divergir aqui derruba o health check de todos os alvos e o ALB passa a
+    devolver 502.
+  EOT
+  type        = number
+  default     = 30080
+
+  validation {
+    condition     = var.node_port_api >= 30000 && var.node_port_api <= 32767
+    error_message = "NodePort precisa estar na faixa 30000-32767."
+  }
 }
 
-variable "postgres_pas" {
-  description = "Senha do PostgreSQL"
-  type        = string
-  sensitive   = true
+variable "gateway_rate_limit" {
+  description = "Requisicoes por segundo por rota no gateway."
+  type        = number
+  default     = 50
 }
 
-variable "postgres_db" {
-  description = "Nome do banco de dados"
-  type        = string
-  default     = "oficina_mecanica"
+variable "gateway_burst_limit" {
+  description = "Rajada permitida acima do rate limit."
+  type        = number
+  default     = 100
 }
 
-variable "jwt_secret_key" {
-  description = "Chave de assinatura JWT com minimo de 32 caracteres"
-  type        = string
-  sensitive   = true
-  default     = "dev-secret-key-minimo-32-caracteres-ok"
+variable "gateway_log_retention_days" {
+  description = "Retencao dos logs de acesso do gateway. Baixa de proposito: o orcamento do lab e de US$ 100."
+  type        = number
+  default     = 7
 }

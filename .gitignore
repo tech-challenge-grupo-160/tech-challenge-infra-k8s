@@ -17,3 +17,8 @@ terraform.rc
 *.key
 .env
 .env.*
+
+# State local do bootstrap - nunca versionar
+bootstrap/terraform.tfstate
+bootstrap/terraform.tfstate.backup
+bootstrap/.terraform.lock.hcl
