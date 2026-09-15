@@ -84,7 +84,7 @@ variable "datadog_api_key" {
 variable "datadog_site" {
   description = "Site do Datadog (ex: datadoghq.com, us5.datadoghq.com, datadoghq.eu)."
   type        = string
-  default     = "us5.datadoghq.com"
+  default     = "datadoghq.com"
 }
 
 variable "cluster_version" {
