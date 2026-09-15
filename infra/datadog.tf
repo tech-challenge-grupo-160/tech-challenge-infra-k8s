@@ -62,6 +62,15 @@ resource "helm_release" "datadog_agent" {
     value = "true"
   }
 
+  # Sem isso, "agent dogstatsd-stats" nao mostra por qual metrica/tags o
+  # Agent esta recebendo trafego - so da pra ver contadores agregados. Nao
+  # existe um valor datadog.dogstatsd.* dedicado no chart para essa flag; ela
+  # e so um env var repassado ao container do agent.
+  set {
+    name  = "agents.containers.agent.envDict.DD_DOGSTATSD_METRICS_STATS_ENABLE"
+    value = "true"
+  }
+
   set {
     name  = "datadog.logs.containerCollectAll"
     value = "true"
