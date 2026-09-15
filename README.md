@@ -137,22 +137,9 @@ O passo a passo e a ordem de dependência estão em
 > **O cluster cobra sozinho.** O control plane do EKS custa US$ 0,10/hora
 > enquanto existir e **não** é suspenso junto com a sessão do Learner Lab.
 
-Para trabalhar só neste repositório, o Terraform direto:
-
-```bash
-cd infra
-terraform init
-terraform plan -var-file=inventories/dev/terraform.tfvars
-```
-
-Em uma conta AWS nova, o primeiro apply pode ser feito sem as Lambdas da
-aplicacao. Depois que `tc-grupo160-auth-dev` e
-`tc-grupo160-authorizer-dev` forem publicadas, aplique novamente habilitando
-as permissoes do API Gateway:
-
-```bash
-terraform apply -var-file=inventories/dev/terraform.tfvars -var='lambdas_publicadas=true'
-```
+Para trabalhar só neste repositório com o Terraform direto — backend, chave do
+Datadog, `lambdas_publicadas` e o cuidado com as pipelines —, veja
+[infra/README.md](infra/README.md).
 
 Manifests do fluxo local com kind:
 
@@ -195,19 +182,16 @@ e o Helm estoura o timeout sem dizer por quê.
 - **Sem acesso:** peça a chave a quem administra a organização do grupo. O
   secret do GitHub não pode ser lido de volta.
 
-Numa conta nova do Learner Lab o segredo ainda não existe - quem o cria é o
-próprio apply, a partir da variável. Exporte a chave antes da primeira subida,
-no `tech-challenge-oficina-mecanica`:
+O passo a passo com os comandos — carregar a chave no terminal sem deixar no
+histórico, validar no Datadog, conferir o que está no Secrets Manager, trocar a
+chave e gravar o secret das pipelines — está em
+[CICLO-DE-VIDA.md → Chave do Datadog](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/CICLO-DE-VIDA.md#chave-do-datadog).
 
-```bash
-export TF_VAR_datadog_api_key="<chave da organizacao>"
-bash scripts/sobe-tudo.sh
-```
+Numa conta nova, **não crie o segredo à mão**: quem cria o
+`tc-grupo160/<ambiente>/datadog-api-key` é este Terraform, e um segredo já
+existente fora do state faz o apply falhar com `ResourceExistsException`.
 
-O `derruba-tudo.sh` remove o segredo junto com o ambiente, então exporte de
-novo na subida seguinte. Sem chave, o `sobe-tudo.sh` para antes do apply com
-`Datadog ligado em inventories/<ambiente>, mas sem chave real`. Para subir sem
-Datadog, use `datadog_enabled = false` no inventory.
+Para subir sem Datadog, use `datadog_enabled = false` no inventory.
 
 Os inventories de dev, hom e prod deixam `datadog_enabled = true`. O Terraform
 usa o provider Helm e a AWS CLI para autenticar no cluster; o `npx` (Node.js) é
