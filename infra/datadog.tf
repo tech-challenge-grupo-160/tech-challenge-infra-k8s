@@ -21,6 +21,7 @@ resource "helm_release" "datadog_agent" {
   create_namespace = true
   repository       = "https://helm.datadoghq.com"
   chart            = "datadog"
+  timeout          = 900
 
   set_sensitive {
     name  = "datadog.apiKey"
@@ -29,7 +30,7 @@ resource "helm_release" "datadog_agent" {
 
   set {
     name  = "datadog.site"
-    value = "datadoghq.com"
+    value = var.datadog_site
   }
 
   set {
