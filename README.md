@@ -177,18 +177,41 @@ logs dos containers e recebe traces APM; não é necessário colocar o Agent den
 do container da API. O mesmo apply cria um segredo no Secrets Manager, e o
 script instrumenta as duas Lambdas com a extensão e a camada .NET oficiais.
 
-A chave deve ser preenchida localmente no inventory do ambiente antes de aplicar:
+A chave **nunca** vai para o inventory. Ela entra pela variável de ambiente
+`TF_VAR_datadog_api_key`:
+
+- **nos pipelines**, pelo secret `TF_VAR_DATADOG_API_KEY` deste repositório;
+- **no `sobe-tudo.sh`**, pelo ambiente ou, na falta, pelo segredo
+  `tc-grupo160/<ambiente>/datadog-api-key` no Secrets Manager da conta.
+
+#### Onde conseguir a chave
+
+A organização do grupo no Datadog fica no site **US1** (`datadoghq.com`). Uma
+chave dessa organização responde 403 em qualquer outro site - o Agent fica 2/3
+e o Helm estoura o timeout sem dizer por quê.
+
+- **Com acesso à organização:** Organization Settings → API Keys
+  (<https://app.datadoghq.com/organization-settings/api-keys>).
+- **Sem acesso:** peça a chave a quem administra a organização do grupo. O
+  secret do GitHub não pode ser lido de volta.
+
+Numa conta nova do Learner Lab o segredo ainda não existe - quem o cria é o
+próprio apply, a partir da variável. Exporte a chave antes da primeira subida,
+no `tech-challenge-oficina-mecanica`:
 
 ```bash
-# infra/inventories/dev/terraform.tfvars
-datadog_enabled = true
-datadog_api_key  = "CHAVE_NOVA_DO_DATADOG"
+export TF_VAR_datadog_api_key="<chave da organizacao>"
+bash scripts/sobe-tudo.sh
 ```
 
-No `dev`, o inventory já deixa `datadog_enabled = true`. Para ambientes sem
-Datadog, mantenha a variável como `false`. O Terraform usa o provider Helm e a
-AWS CLI para autenticar no cluster; o `npx` é usado para executar o
-`datadog-ci` que instrumenta as Lambdas.
+O `derruba-tudo.sh` remove o segredo junto com o ambiente, então exporte de
+novo na subida seguinte. Sem chave, o `sobe-tudo.sh` para antes do apply com
+`Datadog ligado em inventories/<ambiente>, mas sem chave real`. Para subir sem
+Datadog, use `datadog_enabled = false` no inventory.
+
+Os inventories de dev, hom e prod deixam `datadog_enabled = true`. O Terraform
+usa o provider Helm e a AWS CLI para autenticar no cluster; o `npx` (Node.js) é
+usado para executar o `datadog-ci` que instrumenta as Lambdas.
 
 Para conferir a instalação:
 
