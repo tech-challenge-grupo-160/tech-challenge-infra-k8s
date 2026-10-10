@@ -28,6 +28,18 @@ spec:
                 secretKeyRef:
                   name: api-secret
                   key: Jwt__SecretKey
+            # Unified service tagging para o tracer e o DogStatsD. __AMBIENTE__
+            # e substituido no deploy (dev/hom/prod) pelo mesmo sed que resolve
+            # newTag/newName acima. DD_AGENT_HOST aponta pro IP do node: o
+            # Agent roda como DaemonSet, nunca fixe um IP de node aqui.
+            - name: DD_SERVICE
+              value: oficina-mecanica-api
+            - name: DD_ENV
+              value: __AMBIENTE__
+            - name: DD_AGENT_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
           # O /health do ASP.NET consulta o banco. Na nuvem o RDS pode levar
           # alguns segundos a mais para aceitar a primeira conexao, e a migration
           # roda no startup - por isso a folga maior que a do kind.
