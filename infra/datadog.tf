@@ -53,6 +53,31 @@ resource "helm_release" "datadog_agent" {
     value = "true"
   }
 
+  # Sem hostPort, o dogstatsd do chart so fica acessivel pelo IP do proprio
+  # pod do Agent - o app aponta DD_AGENT_HOST para o IP do node (status.hostIP),
+  # entao as metricas de negocio (DogStatsD) nunca chegavam ao Agent.
+  set {
+    name  = "datadog.dogstatsd.port"
+    value = "8125"
+  }
+
+  set {
+    name  = "datadog.dogstatsd.useHostPort"
+    value = "true"
+  }
+
+  set {
+    name  = "datadog.dogstatsd.nonLocalTraffic"
+    value = "true"
+  }
+
+  # Sem isso, "agent dogstatsd-stats" so mostra contadores agregados, sem
+  # indicar qual metrica/tags o Agent recebeu de fato.
+  set {
+    name  = "agents.containers.agent.envDict.DD_DOGSTATSD_METRICS_STATS_ENABLE"
+    value = "true"
+  }
+
   set {
     name  = "datadog.kubeStateMetricsEnabled"
     value = "true"
