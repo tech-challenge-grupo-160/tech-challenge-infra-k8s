@@ -1,4 +1,4 @@
-# Registry das imagens da API (issue #52 / F3-18).
+# Registry das imagens dos servicos (issue #52 / F3-18; Billing e Execucao na F4-08).
 #
 # Ate aqui o deploy usava `kind load docker-image` com uma imagem local e
 # imagePullPolicy: Never - o cluster nunca puxava nada de lugar nenhum. Com o
@@ -14,8 +14,16 @@
 # armazenamento, e manter as imagens entre sessoes evita rebuild desnecessario
 # quando o cluster e recriado.
 
-resource "aws_ecr_repository" "api" {
-  name = "${local.nome}-api"
+# Um repositorio por servico. `api` e o OS Service, com o nome que ja tinha
+# antes da Fase 4: o `sobe-tudo.sh` e o pipeline montam esse nome.
+locals {
+  imagens_ecr = toset(["api", "billing", "execucao"])
+}
+
+resource "aws_ecr_repository" "imagem" {
+  for_each = local.imagens_ecr
+
+  name = "${local.nome}-${each.key}"
 
   # MUTABLE porque a tag `latest` e reescrita a cada deploy. As tags versionadas
   # por commit continuam servindo de referencia imutavel na pratica - o que o
@@ -32,13 +40,15 @@ resource "aws_ecr_repository" "api" {
   # junto no destroy, mesmo com imagens dentro.
   force_delete = true
 
-  tags = { Name = "${local.nome}-api" }
+  tags = { Name = "${local.nome}-${each.key}" }
 }
 
 # Sem isto o repositorio cresce sem limite: cada commit publica uma imagem nova
 # de ~100 MB e nada nunca e removido. O S3 do state e barato, o ECR nao tanto.
-resource "aws_ecr_lifecycle_policy" "api" {
-  repository = aws_ecr_repository.api.name
+resource "aws_ecr_lifecycle_policy" "imagem" {
+  for_each = aws_ecr_repository.imagem
+
+  repository = each.value.name
 
   policy = jsonencode({
     rules = [
@@ -54,4 +64,16 @@ resource "aws_ecr_lifecycle_policy" "api" {
       }
     ]
   })
+}
+
+# O repositorio da API ja existia como recurso unico. Sem o moved, o plan
+# destruiria e recriaria o registry do OS Service, com as imagens dentro.
+moved {
+  from = aws_ecr_repository.api
+  to   = aws_ecr_repository.imagem["api"]
+}
+
+moved {
+  from = aws_ecr_lifecycle_policy.api
+  to   = aws_ecr_lifecycle_policy.imagem["api"]
 }
