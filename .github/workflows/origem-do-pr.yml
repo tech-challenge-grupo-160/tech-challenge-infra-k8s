@@ -1,0 +1,30 @@
+# Garante o fluxo de promocao: a homolog so recebe PR da develop, e a branch
+# principal so recebe PR da homolog. E check obrigatorio nos rulesets das duas
+# branches (F4-10), entao nenhuma mudanca pula etapa.
+name: Origem do PR
+
+on:
+  pull_request:
+    branches: [homolog, main, master]
+
+permissions: {}
+
+jobs:
+  origem:
+    name: Origem do PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Conferir a branch de origem
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          case "$BASE" in
+            homolog)     esperado=develop ;;
+            main|master) esperado=homolog ;;
+          esac
+          if [ "$HEAD" != "$esperado" ]; then
+            echo "::error::PR para $BASE precisa vir da $esperado, nao da $HEAD. Fluxo: develop -> homolog -> $BASE."
+            exit 1
+          fi
+          echo "Origem ok: $HEAD -> $BASE"
