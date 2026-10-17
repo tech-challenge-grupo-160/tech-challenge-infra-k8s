@@ -1,33 +1,31 @@
 # Bootstrap do backend de state
 
-Cria o bucket S3 e a tabela DynamoDB que guardam e travam o state do Terraform dos demais módulos.
+Cria o bucket S3 e a tabela DynamoDB que guardam e travam o state do Terraform
+dos demais módulos.
 
-## Por que este módulo é diferente
+## Por que não é Terraform
 
-É o problema do ovo e da galinha: **não dá para guardar no bucket o state que cria o bucket**. Por isso este módulo é o único que usa **state local**, e roda **uma vez só**, manualmente.
+Era, até ser descoberto que o SCP do AWS Academy Learner Lab nega
+`s3:GetBucketObjectLockConfiguration` — inclusive em conta nova, não só no
+refresh de um bucket já existente. O provider `hashicorp/aws` lê essa
+configuração de forma incondicional sempre que cria ou atualiza um
+`aws_s3_bucket` (`resourceBucketRead`), e trata `AccessDenied` como erro fatal
+em qualquer partição `aws`. Não há flag, `-refresh=false` ou downgrade de
+provider que evite essa leitura.
 
-O `.gitignore` já impede que `terraform.tfstate` seja versionado — o state contém ARNs e atributos que não devem ir para um repositório público.
+Como o bucket e a tabela são criados uma vez e nunca mudam, a solução foi
+tirá-los do Terraform. Quem cria e destrói os dois agora é o AWS CLI puro, nas
+funções `garantir_backend_state` e `destruir_backend_state` de
+[`scripts/comum.sh`](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/master/scripts/comum.sh)
+(no repositório principal). `sobe-tudo.sh` e `derruba-tudo.sh` chamam essas
+funções na etapa 1.
 
-## Como rodar (uma vez)
-
-Com as credenciais da sessão do Learner Lab ativas:
-
-```bash
-cd bootstrap
-terraform init
-terraform apply
-```
-
-Anote as saídas:
-
-```bash
-terraform output state_bucket
-terraform output lock_table
-```
+Esta pasta existe só para documentar essa decisão — não há mais `.tf` aqui.
 
 ## Ligando os outros módulos
 
-Os demais módulos declaram o backend vazio e recebem a configuração no `init`, para o nome do bucket — que contém o id da conta — não ficar escrito em repositório público:
+Os demais módulos continuam declarando o backend vazio e recebendo a
+configuração no `init`:
 
 ```hcl
 terraform {
@@ -35,13 +33,11 @@ terraform {
 }
 ```
 
-O comando pronto sai em:
+`tf_init`, em `scripts/comum.sh`, monta esse `init` com o nome do bucket
+(que contém o id da conta, resolvido em tempo de execução por
+`nome_do_bucket`) e o nome da tabela de lock (`nome_da_tabela_lock`).
 
-```bash
-terraform output backend_config
-```
-
-Nos pipelines, o valor vem da variável de repositório `TF_STATE_BUCKET`:
+Nos pipelines, o bucket vem da variável de repositório `TF_STATE_BUCKET`:
 
 ```bash
 gh variable set TF_STATE_BUCKET --body "<bucket>" --repo tech-challenge-grupo-160/tech-challenge-infra-k8s
@@ -50,12 +46,6 @@ gh variable set TF_STATE_BUCKET --body "<bucket>" --repo tech-challenge-grupo-16
 
 ## Custo
 
-Desprezível. O S3 cobra por armazenamento (state tem alguns KB) e o DynamoDB está em `PAY_PER_REQUEST`, cobrando por operação de lock. Nenhum dos dois tem cobrança por hora — diferente do EKS.
-
-## Limpeza
-
-```bash
-terraform destroy
-```
-
-O bucket tem `force_destroy = true`, então versões antigas do state não travam a remoção. **Só faça isso depois de destruir todos os outros módulos**, senão você perde o state deles.
+Desprezível. O S3 cobra por armazenamento (state tem alguns KB) e o DynamoDB
+está em `PAY_PER_REQUEST`, cobrando por operação de lock. Nenhum dos dois tem
+cobrança por hora — diferente do EKS.

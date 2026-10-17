@@ -44,7 +44,7 @@ não foram aplicados.
 ## Estrutura
 
 ```text
-bootstrap/                    # bucket de state e tabela de lock; state local
+bootstrap/                    # so documentacao: bucket e tabela de lock sao criados via AWS CLI, nao Terraform
 infra/
 ├── rede.tf                   # VPC, subnets, internet gateway e rotas
 ├── nat.tf                    # NAT Gateway: a saida das subnets privadas
