@@ -134,8 +134,13 @@ output "alb_listener_arn" {
 }
 
 output "ecr_api_url" {
-  description = "URL do repositorio de imagens da API. Destino do docker push no deploy."
-  value       = aws_ecr_repository.api.repository_url
+  description = "URL do repositorio de imagens da API (OS Service). Destino do docker push no sobe-tudo.sh."
+  value       = aws_ecr_repository.imagem["api"].repository_url
+}
+
+output "ecr_urls" {
+  description = "URL do repositorio de imagens de cada servico (api, billing, execucao)."
+  value       = { for k, r in aws_ecr_repository.imagem : k => r.repository_url }
 }
 
 output "nat_ip_publico" {
