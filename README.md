@@ -282,7 +282,7 @@ O desenho previsto era OIDC, sem credencial estática ([issue #54](https://githu
 
 ## Arquitetura
 
-Diagrama da arquitetura na nuvem em [docs/diagrams](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/tree/develop/docs/diagrams) no repositório principal — em especial o `C4_04_AWS_Deployment_Diagram.puml`.
+Diagramas da arquitetura em [docs/diagrams](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/tree/develop/docs/diagrams) no repositório principal: a infraestrutura na AWS em [`fase-3/aws-deployment.md`](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/diagrams/fase-3/aws-deployment.md) e a arquitetura em microsserviços da Fase 4 em [`fase-4/arquitetura-microsservicos.md`](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/diagrams/fase-4/arquitetura-microsservicos.md).
 
 ## Repositórios do projeto
 
