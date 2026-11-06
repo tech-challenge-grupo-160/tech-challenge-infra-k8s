@@ -164,6 +164,11 @@ jobs:
       - name: Terraform plan
         if: steps.check.outputs.exists == 'true'
         working-directory: ${{ env.TF_DIR }}
+        # Credenciais do Mercado Pago por ambiente (F4-06). Mesmos secrets do
+        # apply: sem eles aqui, o plan do PR mostraria a remocao do valor.
+        env:
+          TF_VAR_mercadopago_access_token: ${{ secrets[format('MERCADOPAGO_ACCESS_TOKEN_{0}', matrix.env)] }}
+          TF_VAR_mercadopago_webhook_secret: ${{ secrets[format('MERCADOPAGO_WEBHOOK_SECRET_{0}', matrix.env)] }}
         run: |
           if ! terraform plan -no-color -input=false \
             -var-file="inventories/${{ matrix.env }}/terraform.tfvars" \
@@ -302,6 +307,12 @@ jobs:
 
       - name: Terraform apply
         working-directory: ${{ env.TF_DIR }}
+        # Um par de secrets por ambiente: MERCADOPAGO_ACCESS_TOKEN_DEV,
+        # _HOM e _PROD, e o mesmo para MERCADOPAGO_WEBHOOK_SECRET_*.
+        # Sem eles, o segredo existe mas fica sem valor (ver mercadopago.tf).
+        env:
+          TF_VAR_mercadopago_access_token: ${{ secrets[format('MERCADOPAGO_ACCESS_TOKEN_{0}', steps.amb.outputs.env)] }}
+          TF_VAR_mercadopago_webhook_secret: ${{ secrets[format('MERCADOPAGO_WEBHOOK_SECRET_{0}', steps.amb.outputs.env)] }}
         run: |
           terraform apply -auto-approve -input=false \
             -var-file="inventories/${{ steps.amb.outputs.env }}/terraform.tfvars"
