@@ -57,9 +57,8 @@ spec:
       #   - IRSA, uma role so para este ServiceAccount, seria o certo. O Learner
       #     Lab nao permite criar roles;
       #   - launch template no node group com hop limit 2 e o caminho
-      #     estrutural, e de quebra resolveria o problema de security group que
-      #     o cluster.tf documenta. Fica registrado como divida; nao foi feito
-      #     agora porque troca os nodes e o cluster.tf ja explica o risco.
+      #     estrutural. Entrou na F4-05 (infra/cluster.tf); o hostNetwork fica
+      #     ate o spike confirmar no lab que os pods alcancam o IMDS sem ele.
       #
       # Nao ha porta em conflito: o autoscaler so escuta metricas em 8085, e
       # nada mais no node usa essa porta.
