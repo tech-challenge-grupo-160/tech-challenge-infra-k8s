@@ -203,6 +203,20 @@ resource "aws_apigatewayv2_route" "login_api" {
   authorization_type = "NONE"
 }
 
+# Webhook do Mercado Pago (F4-14/F4-20): publico porque quem chama e o Mercado
+# Pago, que nao tem o nosso JWT. A autenticidade e verificada no Billing pela
+# assinatura do header x-signature (segredo tc-grupo160/<amb>/mercadopago).
+# Rota especifica tem precedencia sobre o {proxy+} abaixo; o ALB entrega no
+# Billing pela regra de /api/v1/pagamentos* (alb-servicos.tf).
+resource "aws_apigatewayv2_route" "webhook_mercadopago" {
+  count = local.integrar_cluster ? 1 : 0
+
+  api_id             = aws_apigatewayv2_api.principal.id
+  route_key          = "POST /api/v1/pagamentos/webhook"
+  target             = "integrations/${aws_apigatewayv2_integration.api_cluster[0].id}"
+  authorization_type = "NONE"
+}
+
 # Tudo mais da aplicacao. As 52 rotas protegidas da matriz caem aqui, e e a
 # unica rota do gateway com authorizer - ver authorizer.tf (issue #43).
 #
