@@ -8,3 +8,8 @@ data:
   Jwt__Issuer: "Fiap.TechChallenge.OficinaMecanica"
   Jwt__Audience: "Fiap.TechChallenge.OficinaMecanica"
   Jwt__ExpirationMinutes: "60"
+  # Catalogo da Execucao, consultado pelo OS ao abrir a OS (F4-14). Sem esta
+  # chave o pod cai no padrao do appsettings, http://localhost:8082, e chama a
+  # si mesmo. O nome curto resolve pelo DNS do cluster porque a Execucao vive
+  # no mesmo namespace (oficina-mecanica); o Service dela atende na porta 80.
+  Services__Execucao__BaseUrl: "http://oficina-mecanica-execucao"
