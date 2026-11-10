@@ -1,28 +1,28 @@
 # tech-challenge-infra-k8s
 
-Infraestrutura como código do cluster Kubernetes — Tech Challenge SOAT, Fase 3.
+Infraestrutura como código do cluster Kubernetes — Tech Challenge SOAT, Fases 3 e 4.
 
 ## Propósito
 
-Provisiona, via Terraform, a rede e o cluster Kubernetes onde a API roda, além dos manifests da aplicação.
+Provisiona, via Terraform, a rede e o cluster Kubernetes onde rodam os três serviços (OS, Billing e Execução), além dos manifests do OS Service.
 
 Responsabilidades deste repositório:
 
 - Rede base (VPC, subnets públicas e privadas, NAT Gateway, security groups)
-- Cluster EKS com node group em subnet privada
-- API Gateway, com a rota de autenticação e o authorizer JWT
-- Balanceador interno que expõe a API do cluster ao gateway
-- Registry das imagens da API (ECR)
-- Segredo de assinatura do JWT no Secrets Manager
-- Manifests da API e do HPA
+- Cluster EKS com node group em subnet privada, nodes com a LabRole
+- API Gateway, com a rota de autenticação, o authorizer JWT e a rota pública do webhook do Mercado Pago
+- Balanceador interno que expõe os três serviços ao gateway, com uma regra por caminho para cada serviço
+- Registry das imagens (ECR)
+- Segredos do JWT e do Mercado Pago no Secrets Manager
+- Manifests do OS Service e do Cluster Autoscaler
 
-O banco de dados fica em [tech-challenge-infra-database](https://github.com/tech-challenge-grupo-160/tech-challenge-infra-database). A imagem da API é construída na [aplicação principal](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica).
+Os bancos ficam em [tech-challenge-infra-database](https://github.com/tech-challenge-grupo-160/tech-challenge-infra-database). A imagem do OS Service é construída na [aplicação principal](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica), e as do Billing e da Execução nos repositórios deles, cada um com os próprios manifests `k8s/`.
 
 ## Status
 
-O ambiente `dev` está no ar e a aplicação responde pela internet, no endpoint do
-API Gateway. `hom` e `prod` têm a configuração pronta nos inventories, mas ainda
-não foram aplicados.
+Os ambientes sobem e descem sob demanda pelos scripts do repositório principal
+(ver [Execução](#execução)); nenhum fica de pé entre as sessões do Learner Lab.
+O ciclo completo com os três serviços foi validado em `dev` em 09/11/2026.
 
 | Componente | Estado |
 |---|---|
@@ -32,11 +32,13 @@ não foram aplicados.
 | Balanceador interno + VPC Link | ✅ |
 | ECR e deploy da API | ✅ |
 | Cluster Autoscaler | ✅ manifest em `k8s/cluster-autoscaler`, descoberta por tag no ASG |
+| Regras por serviço no ALB (Billing 30081, Execução 30082) e webhook público | ✅ Fase 4, `infra/alb-servicos.tf` |
+| Pods com acesso a SNS, SQS e DynamoDB pela LabRole (IMDS com hop limit 2) | ✅ Fase 4, F4-05 |
 
 > **O cluster cobra sozinho.** O control plane do EKS custa US$ 0,10/hora
 > **enquanto existir** e não é suspenso junto com a sessão do Learner Lab —
-> diferente das instâncias EC2. Com NAT, balanceador e banco, um ambiente de pé
-> custa cerca de **US$ 5/dia**.
+> diferente das instâncias EC2. Com NAT, balanceador e os dois bancos, um
+> ambiente de pé custa cerca de **US$ 5,40/dia**.
 >
 > A variável `criar_cluster`, no inventory de cada ambiente, liga e desliga
 > cluster e NAT juntos.
@@ -52,7 +54,10 @@ infra/
 ├── vpc-endpoints.tf          # endpoint do Secrets Manager, para a Lambda na VPC
 ├── cluster.tf                # EKS, node group, metrics-server e tags do autoscaler
 ├── ecr.tf                    # registry das imagens da API
-├── alb.tf                    # balanceador interno e target group dos nodes
+├── alb.tf                    # balanceador interno e target group do OS Service
+├── alb-servicos.tf           # target groups e regras por caminho do Billing e da Execucao
+├── mercadopago.tf            # segredo das credenciais do Mercado Pago
+├── datadog.tf                # Datadog Agent via Helm, quando ligado no inventory
 ├── api-gateway.tf            # HTTP API, rotas e integracoes
 ├── authorizer.tf             # Lambda authorizer que protege /api/v1
 ├── secrets.tf                # chave de assinatura do JWT
@@ -111,17 +116,18 @@ Medido em `dev` em 04/09, forçando 6 pods de 900m contra dois `t3.medium`:
 
 A descoberta é por tag no Auto Scaling group, não por parâmetro: `infra/cluster.tf` marca o ASG com `k8s.io/cluster-autoscaler/enabled` e `k8s.io/cluster-autoscaler/<cluster>`. A segunda tag traz o nome do cluster porque os três ambientes dividem a mesma conta do Learner Lab — sem ela, o autoscaler de `dev` escalaria os nodes de `hom` e `prod` também.
 
-Na AWS, o node group usa uma role de instancia criada pelo Terraform com as
-policies oficiais do EKS. O correto para componentes como o autoscaler seria
-IRSA, com uma role so para o ServiceAccount.
+Na AWS, o node group usa a `LabRole` preexistente: o Learner Lab não permite
+criar roles IAM. Os pods herdam essa role pelo IMDS da instância, e por isso o
+launch template dos nodes usa hop limit 2 (F4-05). O correto para componentes
+como o autoscaler seria IRSA, com uma role só para o ServiceAccount, mas o lab
+não permite.
 
 A revisão dos limiares é a ADR [#63](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/issues/63).
 
 ## Execução
 
 Para subir ou derrubar o ambiente **inteiro**, os scripts ficam no repositório
-principal — eles orquestram os quatro repositórios, e nenhum dos quatro é dono
-dos demais:
+principal — eles orquestram os seis repositórios, e nenhum é dono dos demais:
 
 ```bash
 bash ../tech-challenge-oficina-mecanica/scripts/sobe-tudo.sh
@@ -133,6 +139,15 @@ bash ../tech-challenge-oficina-mecanica/scripts/derruba-tudo.sh
 
 O passo a passo e a ordem de dependência estão em
 [docs/CICLO-DE-VIDA.md](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/CICLO-DE-VIDA.md).
+Na primeira vez, comece pelo
+[roteiro rápido](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica/blob/develop/docs/CICLO-DE-VIDA.md#roteiro-rápido).
+
+> **Merge neste repositório aplica.** O `terraform-ci.yml` roda o apply em todo
+> push em `develop`, `homolog` e `main`, inclusive quando a mudança é só em
+> `k8s/` ou em documentação. Com o ambiente derrubado, esse apply tenta recriar
+> tudo e falha no meio, porque as Lambdas não existem. Para mergear nesse
+> estado, pause o workflow (`gh workflow disable terraform-ci.yml`), mergeie e
+> reative.
 
 > **O cluster cobra sozinho.** O control plane do EKS custa US$ 0,10/hora
 > enquanto existir e **não** é suspenso junto com a sessão do Learner Lab.
@@ -191,7 +206,9 @@ Numa conta nova, **não crie o segredo à mão**: quem cria o
 `tc-grupo160/<ambiente>/datadog-api-key` é este Terraform, e um segredo já
 existente fora do state faz o apply falhar com `ResourceExistsException`.
 
-Para subir sem Datadog, use `datadog_enabled = false` no inventory.
+Para subir sem Datadog, rode o `sobe-tudo.sh` com `--sem-datadog`: ele desliga
+o Agent só naquela subida, sem editar o inventory. Para desligar de vez, use
+`datadog_enabled = false` no inventory.
 
 Os inventories de dev, hom e prod deixam `datadog_enabled = true`. O Terraform
 usa o provider Helm e a AWS CLI para autenticar no cluster; o `npx` (Node.js) é
