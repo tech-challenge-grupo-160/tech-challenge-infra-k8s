@@ -5,6 +5,16 @@ metadata:
   name: oficina-mecanica-api
 spec:
   template:
+    metadata:
+      labels:
+        # Unified service tagging: logs, traces e metricas do pod com o mesmo
+        # service/env no Datadog, para o log abrir o trace e vice-versa (F4-32).
+        tags.datadoghq.com/service: oficina-mecanica-api
+        tags.datadoghq.com/env: __AMBIENTE__
+      annotations:
+        # source csharp aplica o pipeline de logs .NET do Datadog; o JSON do
+        # servico ja traz dd.trace_id/dd.span_id para a correlacao com o trace.
+        ad.datadoghq.com/api.logs: '[{"source":"csharp","service":"oficina-mecanica-api"}]'
     spec:
       containers:
         - name: api
