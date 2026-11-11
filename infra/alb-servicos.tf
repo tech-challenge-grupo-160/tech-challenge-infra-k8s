@@ -25,7 +25,9 @@ locals {
     execucao = {
       node_port  = 30082
       prioridade = 20
-      caminhos   = ["/api/v1/catalogo*", "/api/v1/diagnosticos*", "/api/v1/execucoes*"]
+      # O ALB aceita no maximo 5 valores por condicao de caminho. Passando
+      # disso, a Execucao precisa de uma segunda regra.
+      caminhos = ["/api/v1/catalogo*", "/api/v1/diagnosticos*", "/api/v1/estoque*", "/api/v1/execucoes*"]
     }
   }
 }
