@@ -3,6 +3,12 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: oficina-mecanica-api
+  labels:
+    # Unified service tagging no Deployment (F4-31). O version vem da tag da
+    # imagem, copiada pela replacement do kustomization.yaml.
+    tags.datadoghq.com/service: oficina-mecanica-api
+    tags.datadoghq.com/env: __AMBIENTE__
+    tags.datadoghq.com/version: placeholder
 spec:
   template:
     metadata:
@@ -11,6 +17,9 @@ spec:
         # service/env no Datadog, para o log abrir o trace e vice-versa (F4-32).
         tags.datadoghq.com/service: oficina-mecanica-api
         tags.datadoghq.com/env: __AMBIENTE__
+        # Tag da imagem (SHA do commit), copiada pela replacement do
+        # kustomization.yaml: cada deploy vira uma versao no APM (F4-31).
+        tags.datadoghq.com/version: placeholder
       annotations:
         # source csharp aplica o pipeline de logs .NET do Datadog; o JSON do
         # servico ja traz dd.trace_id/dd.span_id para a correlacao com o trace.
@@ -38,14 +47,24 @@ spec:
                 secretKeyRef:
                   name: api-secret
                   key: Jwt__SecretKey
-            # Unified service tagging para o tracer e o DogStatsD. __AMBIENTE__
-            # e substituido no deploy (dev/hom/prod) pelo mesmo sed que resolve
-            # newTag/newName acima. DD_AGENT_HOST aponta pro IP do node: o
+            # Unified service tagging para o tracer e o DogStatsD, lido dos
+            # labels do pod para env/service/version do APM nunca divergirem
+            # deles (F4-31). __AMBIENTE__ e substituido no deploy (dev/hom/prod)
+            # pelo mesmo sed que resolve newTag/newName; DD_ENV separa os
+            # ambientes no Datadog. DD_AGENT_HOST aponta pro IP do node: o
             # Agent roda como DaemonSet, nunca fixe um IP de node aqui.
             - name: DD_SERVICE
-              value: oficina-mecanica-api
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/service']
             - name: DD_ENV
-              value: __AMBIENTE__
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/env']
+            - name: DD_VERSION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/version']
             - name: DD_AGENT_HOST
               valueFrom:
                 fieldRef:

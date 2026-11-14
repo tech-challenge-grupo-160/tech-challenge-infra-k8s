@@ -39,3 +39,24 @@ images:
   - name: oficina-mecanica-api
     newName: oficina-mecanica-api
     newTag: placeholder
+
+# DD_VERSION (unified service tagging, F4-31) = tag da imagem, que o deploy ja
+# troca pelo SHA do commit. A replacement roda depois do transformer de images e
+# copia o valor final para os labels tags.datadoghq.com/version do Deployment e
+# do pod; o container le o label por fieldRef. Assim o deploy nao precisa de
+# mais um placeholder para substituir.
+replacements:
+  - source:
+      kind: Deployment
+      name: oficina-mecanica-api
+      fieldPath: spec.template.spec.containers.[name=api].image
+      options:
+        delimiter: ":"
+        index: 1
+    targets:
+      - select:
+          kind: Deployment
+          name: oficina-mecanica-api
+        fieldPaths:
+          - metadata.labels.[tags.datadoghq.com/version]
+          - spec.template.metadata.labels.[tags.datadoghq.com/version]
