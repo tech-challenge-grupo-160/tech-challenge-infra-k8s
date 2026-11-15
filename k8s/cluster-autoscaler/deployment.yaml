@@ -40,30 +40,15 @@ spec:
         # de uma decisao de scale down.
         cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
     spec:
-      # A rede do node, e nao a rede de pods. Sem isto o autoscaler nao consegue
-      # credencial da AWS e morre no primeiro ciclo:
+      # Rede de pods, sem hostNetwork. Ate a Fase 3 o autoscaler precisava da
+      # rede do node para pegar a credencial da LabRole: os nodes subiam com
+      # HttpPutResponseHopLimit = 1 e o pod gastava um hop a mais ate o IMDS,
+      # morrendo com "NoCredentialProviders: no valid providers in chain".
       #
-      #   NoCredentialProviders: no valid providers in chain
-      #   F ... Failed to create AWS Manager
-      #
-      # O motivo e o IMDS. As instancias do node group sobem com
-      # HttpPutResponseHopLimit = 1 - conferido em 04/09 nos dois nodes de dev -,
-      # e um pod na rede de pods gasta um hop a mais para chegar la, entao a
-      # requisicao e descartada sem resposta. Na rede do node o processo usa a
-      # pilha do host direto, cabe em um hop, e o SDK acha a role da instancia.
-      #
-      # As duas alternativas foram consideradas e descartadas:
-      #
-      #   - IRSA, uma role so para este ServiceAccount, seria o certo. O Learner
-      #     Lab nao permite criar roles;
-      #   - launch template no node group com hop limit 2 e o caminho
-      #     estrutural, e de quebra resolveria o problema de security group que
-      #     o cluster.tf documenta. Fica registrado como divida; nao foi feito
-      #     agora porque troca os nodes e o cluster.tf ja explica o risco.
-      #
-      # Nao ha porta em conflito: o autoscaler so escuta metricas em 8085, e
-      # nada mais no node usa essa porta.
-      hostNetwork: true
+      # Desde a F4-05 o node group tem launch template com hop limit 2
+      # (infra/cluster.tf). Validado em 07/11 no dev: autoscaler na rede de
+      # pods registrou o ASG sem erro de credencial. IRSA continua fora porque
+      # o Learner Lab nao permite criar roles.
 
       # Garante que ele nao seja o primeiro a ser despejado quando o node aperta.
       priorityClassName: system-cluster-critical

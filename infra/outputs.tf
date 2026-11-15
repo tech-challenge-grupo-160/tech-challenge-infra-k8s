@@ -58,6 +58,16 @@ output "jwt_secret_arn" {
   value       = aws_secretsmanager_secret.jwt_signing_key.arn
 }
 
+output "mercadopago_secret_name" {
+  description = "Nome do secret com as credenciais do Mercado Pago. Consumido pelo Billing - nunca o valor."
+  value       = aws_secretsmanager_secret.mercadopago.name
+}
+
+output "mercadopago_secret_arn" {
+  description = "ARN do secret com as credenciais do Mercado Pago."
+  value       = aws_secretsmanager_secret.mercadopago.arn
+}
+
 output "gateway_url" {
   description = "URL base do API Gateway. Rota de autenticacao: POST <url>/auth."
   value       = aws_apigatewayv2_stage.principal.invoke_url

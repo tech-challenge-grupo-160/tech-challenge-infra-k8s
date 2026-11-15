@@ -68,6 +68,13 @@ Três cuidados:
   aplique com `-var='lambdas_publicadas=false'`, publique as funções e aplique
   de novo **sem** a variável. Se ficar em `false`, o gateway perde a permissão de
   invocar as Lambdas e o `POST /auth` passa a responder 500.
+- **Credenciais do Mercado Pago.** O segredo `tc-grupo160/<ambiente>/mercadopago`
+  recebe o valor de `TF_VAR_mercadopago_access_token` e
+  `TF_VAR_mercadopago_webhook_secret`. Num apply local sem essas variáveis, o
+  Terraform **remove o valor** que a pipeline gravou, e o Billing para de subir.
+  Exporte as duas antes do apply ou deixe esse ambiente para a pipeline. Os
+  secrets do GitHub e o passo a passo estão em
+  [docs/MERCADO-PAGO.md do Billing](https://github.com/tech-challenge-grupo-160/tech-challenge-oficina-mecanica-billing/blob/develop/docs/MERCADO-PAGO.md).
 - **Nada de apply junto com a pipeline.** Plan e apply pegam o lock do state, e
   o Terraform não espera: quem chega depois falha na hora. Não aplique um
   ambiente enquanto um push ou um PR estiver rodando a pipeline dele.

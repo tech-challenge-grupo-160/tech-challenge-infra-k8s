@@ -61,7 +61,13 @@ resource "aws_eks_node_group" "principal" {
 
   instance_types = var.node_instance_types
   capacity_type  = "ON_DEMAND"
-  disk_size      = var.node_disk_size
+
+  # O disco saiu daqui: com launch template, o EKS recusa `disk_size` no node
+  # group e o tamanho passa a ser o block_device_mappings do template.
+  launch_template {
+    id      = aws_launch_template.nodes[0].id
+    version = aws_launch_template.nodes[0].latest_version
+  }
 
   scaling_config {
     desired_size = var.node_desired_size
@@ -83,6 +89,54 @@ resource "aws_eks_node_group" "principal" {
     # autoscaler, ou ajuste manual. Sem isto, todo apply devolveria a contagem
     # para o valor da variavel e desfaria o autoscaling.
     ignore_changes = [scaling_config[0].desired_size]
+  }
+
+  tags = { Name = "${local.nome}-nodes" }
+}
+
+# ------------------------------------------------- launch template (F4-05)
+#
+# Existe por um motivo so: o hop limit do IMDS. Sem template, os nodes sobem com
+# HttpPutResponseHopLimit = 1, e um pod na rede de pods gasta um hop a mais para
+# chegar ao 169.254.169.254 - a resposta morre no caminho e o SDK da AWS falha
+# com NoCredentialProviders. Foi o que derrubou o Cluster Autoscaler na Fase 3
+# (contornado com hostNetwork) e e o que impediria os servicos da Fase 4 de
+# falar com SNS, SQS e DynamoDB pela LabRole. IRSA continua fora: o lab nao
+# deixa criar role.
+#
+# De proposito, o template NAO define:
+#   - image_id nem user_data: a AMI e o bootstrap seguem gerenciados pelo EKS;
+#   - vpc_security_group_ids: sem eles, o EKS continua colocando nas instancias
+#     o security group do cluster, e a regra banco_dos_nodes_eks (abaixo) segue
+#     valendo sem mudanca. Trocar para o `sg_nodes` e outra discussao.
+#
+# Mudar o template troca os nodes em rolling update (max_unavailable = 1).
+resource "aws_launch_template" "nodes" {
+  count = var.criar_cluster ? 1 : 0
+
+  name_prefix = "${local.nome}-nodes-"
+  description = "Nodes do EKS com hop limit 2 no IMDS para os pods usarem a LabRole"
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+  }
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+
+    ebs {
+      volume_size           = var.node_disk_size
+      volume_type           = "gp3"
+      encrypted             = true
+      delete_on_termination = true
+    }
+  }
+
+  tag_specifications {
+    resource_type = "instance"
+    tags          = { Name = "${local.nome}-node" }
   }
 
   tags = { Name = "${local.nome}-nodes" }
@@ -126,6 +180,9 @@ resource "aws_eks_addon" "metrics_server" {
 # verdadeiras de novo. Fica registrado como o caminho mais correto; nao foi
 # adotado agora porque launch template com node group gerenciado tem arestas
 # proprias (AMI e user data) e o prazo nao comporta o risco.
+#
+# Desde a F4-05 o node group TEM launch template (acima), mas ele nao define
+# security group justamente para nao mexer nesta regra.
 resource "aws_vpc_security_group_ingress_rule" "banco_dos_nodes_eks" {
   count = var.criar_cluster ? 1 : 0
 
