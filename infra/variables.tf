@@ -81,6 +81,34 @@ variable "datadog_api_key" {
   }
 }
 
+variable "mercadopago_access_token" {
+  description = <<-EOT
+    Access token da aplicacao no Mercado Pago (credencial de teste em todos os
+    ambientes do lab). Informado por TF_VAR_mercadopago_access_token; nunca
+    versionar o valor real. Vazio cria o segredo sem valor.
+  EOT
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "mercadopago_webhook_secret" {
+  description = <<-EOT
+    Assinatura secreta dos webhooks, gerada pelo Mercado Pago ao salvar a URL de
+    notificacao. Informada por TF_VAR_mercadopago_webhook_secret; nunca versionar.
+  EOT
+  type        = string
+  sensitive   = true
+  default     = ""
+
+  # Sem a assinatura o Billing nao consegue validar o header x-signature, e
+  # aceitar webhook sem validar seria pior do que nao ter o segredo.
+  validation {
+    condition     = var.mercadopago_access_token == "" || trimspace(var.mercadopago_webhook_secret) != ""
+    error_message = "mercadopago_webhook_secret precisa ser informada junto com mercadopago_access_token."
+  }
+}
+
 variable "datadog_site" {
   description = "Site do Datadog (ex: datadoghq.com, us5.datadoghq.com, datadoghq.eu)."
   type        = string

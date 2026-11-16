@@ -58,3 +58,21 @@ resource "aws_vpc_endpoint" "secrets_manager" {
 
   tags = { Name = "${local.nome}-secretsmanager" }
 }
+
+# A regra acima referencia o `sg_nodes`, que fica nas ENIs do control plane e
+# nao nas instancias (ver banco_dos_nodes_eks em cluster.tf). Os nodes - e os
+# pods, que saem com o security group do node pelo VPC CNI - carregam o
+# security group que o EKS cria. Sem esta regra, com o DNS privado do endpoint
+# ligado, qualquer leitura do Secrets Manager a partir de um pod pendura ate o
+# timeout. Foi o que travou o Billing no startup ao ler as credenciais do
+# Mercado Pago (ensaio do dev, 15/11/2026).
+resource "aws_vpc_security_group_ingress_rule" "endpoints_dos_nodes_eks" {
+  count = var.criar_cluster ? 1 : 0
+
+  security_group_id            = aws_security_group.endpoints.id
+  description                  = "HTTPS a partir dos nodes do EKS"
+  referenced_security_group_id = aws_eks_cluster.principal[0].vpc_config[0].cluster_security_group_id
+  from_port                    = 443
+  to_port                      = 443
+  ip_protocol                  = "tcp"
+}

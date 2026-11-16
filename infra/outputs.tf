@@ -58,6 +58,16 @@ output "jwt_secret_arn" {
   value       = aws_secretsmanager_secret.jwt_signing_key.arn
 }
 
+output "mercadopago_secret_name" {
+  description = "Nome do secret com as credenciais do Mercado Pago. Consumido pelo Billing - nunca o valor."
+  value       = aws_secretsmanager_secret.mercadopago.name
+}
+
+output "mercadopago_secret_arn" {
+  description = "ARN do secret com as credenciais do Mercado Pago."
+  value       = aws_secretsmanager_secret.mercadopago.arn
+}
+
 output "gateway_url" {
   description = "URL base do API Gateway. Rota de autenticacao: POST <url>/auth."
   value       = aws_apigatewayv2_stage.principal.invoke_url
@@ -134,8 +144,13 @@ output "alb_listener_arn" {
 }
 
 output "ecr_api_url" {
-  description = "URL do repositorio de imagens da API. Destino do docker push no deploy."
-  value       = aws_ecr_repository.api.repository_url
+  description = "URL do repositorio de imagens da API (OS Service). Destino do docker push no sobe-tudo.sh."
+  value       = aws_ecr_repository.imagem["api"].repository_url
+}
+
+output "ecr_urls" {
+  description = "URL do repositorio de imagens de cada servico (api, billing, execucao)."
+  value       = { for k, r in aws_ecr_repository.imagem : k => r.repository_url }
 }
 
 output "nat_ip_publico" {
